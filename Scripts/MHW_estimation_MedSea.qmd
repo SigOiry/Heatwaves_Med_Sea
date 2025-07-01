@@ -1,0 +1,808 @@
+```{r Library}
+library(tidyverse)
+library(terra)
+library(heatwaveR)
+library(sf)
+library(trend)
+library(zyp)
+library(mapdata)
+library(future.apply)
+```
+
+```{r filelist}
+
+SST_list <- list.files("Data/SST", pattern = ".nc", recursive = T, full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(img_name = gsub(".*/","",path),
+         Date = as.Date(substr(img_name,1,8), format = "%Y%m%d"))
+```
+
+```{r mask}
+
+mask <- rast("Data/mask_Med_Sea/mask.nc") %>% 
+  terra::as.polygons() %>% 
+  st_as_sf() %>% 
+  dplyr::filter(mask == 1) %>% 
+  vect()
+```
+
+```{r img_opening}
+
+for(i in 1:nrow(SST_list)){
+  
+  print(paste0(i, "/",nrow(SST_list)))
+  
+  df_i <- (rast(SST_list$path[i])[[1]]-273.15) %>% 
+    crop(mask, mask = T) %>% 
+    as.data.frame(xy = T) %>% 
+    mutate(date = SST_list$Date[i])
+  
+  write.csv(df_i, paste0("Outputs/SST/Cropped_CSV/", gsub(".nc",".csv",SST_list$img_name[i])), row.names = F)
+}
+
+```
+
+```{r HW analysis  NOT WORKING --- TO COMPUTATIONALLY INTENSIVE}
+library(data.table)
+List_HW_csv <- list.files("Outputs/SST/Cropped_CSV/", pattern = ".csv",recursive = T, full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         Date = as.Date(substr(filename,1,8), format = "%Y%m%d"))
+
+# Create a progress bar
+pb <- txtProgressBar(min = 0, max = nrow(List_HW_csv), style = 3)
+
+# Efficiently read all CSV files and combine them into a single data.table with progress bar
+all_data <- rbindlist(lapply(seq_along(List_HW_csv$path), function(i) {
+  # Update the progress bar
+  setTxtProgressBar(pb, i)
+  
+  # Read the CSV file
+  fread(List_HW_csv$path[i])
+}), use.names = TRUE, fill = TRUE)
+
+# Close the progress bar
+close(pb)
+```
+
+```{r Test with SQLite}
+
+library(data.table)
+library(DBI)
+library(RSQLite)
+library(dtplyr)
+
+List_HW_csv <- list.files("Outputs/SST/Cropped_CSV/", pattern = ".csv",recursive = T, full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         Date = as.Date(substr(filename,1,8), format = "%Y%m%d"))
+
+# Create a progress bar
+pb <- txtProgressBar(min = 0, max = nrow(List_HW_csv), style = 3)
+
+# Efficiently read all CSV files and combine them into a single data.table with progress bar
+all_data <- rbindlist(lapply(seq_along(List_HW_csv$path), function(i) {
+  # Update the progress bar
+  setTxtProgressBar(pb, i)
+  
+  # Read the CSV file
+  fread(List_HW_csv$path[i])
+}), use.names = TRUE, fill = TRUE)
+
+# Close the progress bar
+close(pb)
+
+all_data_wide <- all_data  %>% 
+  mutate(Data_num = as.numeric(date)) %>% 
+  dplyr::select(-date) %>% 
+  pivot_wider(names_from = Data_num, values_from = analysed_sst)
+
+all_data_wide_lz <- data.table(all_data_wide)
+
+all_data_wide_with_ID <- copy(`all_data_wide_lz`)[, `:=`(ID = 1:nrow(.SD))]
+
+date_list <- as.character(unique(as.numeric(List_HW_csv$Date)))
+
+tic()
+All_data_long_with_ID <- melt(`all_data_wide_with_ID`, measure.vars = date_list, variable.name = "date", value.name = "SST", variable.factor = FALSE)
+toc()
+# Connect to SQLite database (it will create a new one if it doesn't exist)
+conn <- dbConnect(RSQLite::SQLite(), "Data/SST/SQL/SST_since1982.db")
+
+# Check if the database was created successfully
+dbListTables(conn)
+
+# Write the data to the database
+dbWriteTable(conn, "Long_df_SST", All_data_long_with_ID, overwrite = TRUE)
+
+# Fetch all rows from the table
+query_pixel <- dbGetQuery(conn, "SELECT * FROM Long_df_SST WHERE ID = 2")
+
+
+tic()
+All_data_long_with_ID[ID == 1]
+toc()
+
+all_data_sample %>% 
+  mutate(ID = 1:1000) %>% 
+  lazy_dt() %>% 
+  slice(1)
+
+
+all_data_wide_with_ID[{
+    .rows <- 1
+    .rows[between(.rows, -.N, .N)]
+}]
+
+
+```
+
+```{r lazy dt}
+
+library(data.table)
+library(dtplyr)
+library(tidyverse)
+
+List_HW_csv <- list.files("Outputs/SST/Cropped_CSV/", pattern = ".csv",recursive = T, full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         Date = as.Date(substr(filename,1,8), format = "%Y%m%d"))
+
+# Create a progress bar
+pb <- txtProgressBar(min = 0, max = nrow(List_HW_csv), style = 3)
+
+# Efficiently read all CSV files and combine them into a single data.table with progress bar
+all_data <- rbindlist(lapply(seq_along(List_HW_csv$path), function(i) {
+  # Update the progress bar
+  setTxtProgressBar(pb, i)
+  
+  # Read the CSV file
+  fread(List_HW_csv$path[i])
+}), use.names = TRUE, fill = TRUE)
+
+# Close the progress bar
+close(pb)
+
+
+# all_data_wide <- all_data  %>% 
+#   mutate(Data_num = as.numeric(date)) %>% 
+#   dplyr::select(-date) %>% 
+#   pivot_wider(names_from = Data_num, values_from = analysed_sst)
+
+all_data_wide <- dcast(`all_data`, formula = x + y ~ date, value.var = "analysed_sst")
+
+all_data_wide_lz <- data.table(all_data_wide)
+
+all_data_wide_with_ID <- copy(`all_data_wide_lz`)[, `:=`(ID = 1:nrow(.SD))]
+
+write.csv(all_data_wide_with_ID, "Outputs/SST/all_data_SST.csv", row.names = F)
+
+all_data_wide_with_ID[{
+    .rows <- 1
+    .rows[between(.rows, -.N, .N)]
+}]
+
+
+```
+
+```{r HEATWAVE detection}
+
+library(heatwaveR)
+library(progress)
+
+all_data_wide_with_ID <-  data.table::fread("Outputs/SST/all_data_SST.csv")
+
+total_rows <- nrow(all_data_wide_with_ID)
+
+# Initialize the progress bar with a custom token for percentage
+pb <- progress_bar$new(
+  format = "Processing pixel :current/:total [:bar] :custom_percent | Elapsed: :elapsedfull | ETA: :eta",
+  total = total_rows,
+  clear = FALSE,
+  width = 80
+)
+
+# Loop over each row
+for(i in 76642:total_rows){
+  
+  # Transform the i-th pixel's data from wide to long format
+  pixel_i <- all_data_wide_with_ID[i,] %>% 
+    pivot_longer(-c(x, y, ID), names_to = "Date", values_to = "SST")
+  
+  df_heatwaveR <- pixel_i %>% 
+    rename(t = Date,
+           temp = SST) %>%
+    mutate(t = as.Date(t)) %>%
+    dplyr::select(t, temp)
+    
+  # Compute the climatology and detect heatwave events
+  clim <- ts2clm(df_heatwaveR, climatologyPeriod = c(as.Date("1982-01-01"), as.Date("2024-12-31")))
+  event <- detect_event(clim, categories = TRUE, minDuration = 5, season = "peak", S = FALSE)
+  
+  rslt <- event %>% 
+    mutate(x = unique(pixel_i$x),
+           y = unique(pixel_i$y))
+  
+  # Write results to CSV
+  write.csv(rslt, paste0("Outputs/SST/HW_detection/pixel_", i, ".csv"), row.names = FALSE)
+  
+  # Update the progress bar with a custom percentage (two decimals)
+  pb$tick(tokens = list(custom_percent = sprintf("%.2f%%", (i/total_rows)*100)))
+}
+
+```
+
+```{r Extraction of HW metrics}
+
+HW_pixel_list <- list.files("Outputs/SST/HW_detection", pattern = ".csv", full.names = T)
+
+pb <- txtProgressBar(min = 0, max = length(HW_pixel_list), style = 3)
+
+for(i in 1:length(HW_pixel_list)){
+
+    setTxtProgressBar(pb, i)
+
+  
+  df_i <- read.csv(HW_pixel_list[i]) %>% 
+    mutate(year = substr(as.character(date_start),1,4)) %>% 
+    group_by(year,x,y) %>% 
+    reframe(number_events = n(),
+            duration_mean = mean(duration, na.rm = T),
+            intensity_mean = mean(intensity_mean, na.rm = T),
+            intensity_cumulative_sum = sum(intensity_cumulative),
+            intensity_cumulative_mean = mean(intensity_cumulative,na.rm = T),
+            intensity_mean_abs = mean(intensity_mean_abs, na.rm = T),
+            intensity_cumulative_abs_sum = sum(intensity_cumulative_abs),
+            intensity_cumulative_abs_mean = mean(intensity_cumulative_abs,na.rm = T),
+            rate_onset = mean(rate_onset, na.rm = T),
+            rate_decline = mean(rate_decline, na.rm = T))
+
+  write.csv(df_i,paste0("Outputs/SST/Summary_per_year_per_pixel/pixel_",i,".csv"), row.names = F)
+  
+}
+
+close(pb)
+
+
+```
+
+
+PLOTTING HW metrics
+
+
+```{r Prep data for plotting}
+library(data.table)
+library(tidyterra)
+library(sf)
+library(Utilities.Package)
+
+mask <- rast("Data/mask_Med_Sea/mask.nc") %>% 
+  terra::as.polygons() %>% 
+  st_as_sf() %>% 
+  dplyr::filter(mask == 1) %>% 
+  vect()
+
+template <- rast("Data/SST/RAW/1984/03/19840301000000-GOS-L4_GHRSST-SSTfnd-OISST_HR_REP-MED-v02.0-fv03.0.nc") %>% 
+  crop(mask, mask = T)
+
+landmask <- vect("Data/Land_Mask/GSHHS_f_L1.shp") %>% 
+  crop(template)
+
+values(template) <- NA
+
+List_HW_csv <- list.files("Outputs/SST/Summary_per_year_per_pixel/", pattern = ".csv",recursive = T, full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path))
+
+# Create a progress bar
+pb <- txtProgressBar(min = 0, max = nrow(List_HW_csv), style = 3)
+
+# Efficiently read all CSV files and combine them into a single data.table with progress bar
+all_data <- rbindlist(lapply(seq_along(List_HW_csv$path), function(i) {
+  # Update the progress bar
+  setTxtProgressBar(pb, i)
+  
+  # Read the CSV file
+  fread(List_HW_csv$path[i])
+}), use.names = TRUE, fill = TRUE)
+
+# Close the progress bar
+close(pb)
+
+dates <- c(1982:2024)
+
+```
+
+
+```{r Plotting n_event}
+
+for(i in dates){
+
+  print(i)  
+
+    data_of_the_year <- all_data %>% 
+      dplyr::filter(year == i) %>% as_tibble()
+  
+  if(nrow(data_of_the_year) != 0){  
+    points_of_the_year <- vect(data_of_the_year, geom = c("x", "y"), crs = crs("EPSG:4326"))
+    
+    n_event <- rasterize(points_of_the_year, template, crs = "EPSG:4326",field = "number_events", background = 0) %>% 
+      crop(mask, mask = T)
+    
+    writeCDF(n_event,paste0("Outputs/SST/nc/n_event_per_year/","n_event_",i,".nc"), overwrite = T)
+    
+  }else{
+    
+    n_event <- template$analysed_sst
+    values(n_event) <- 0
+  }
+  
+  plot <- ggplot()+
+            geom_spatraster(data = n_event)+
+            scale_fill_scico("Number \nof \nEvent",
+                             palette  = "batlow",
+                             direction  = 1,
+                             limits = c(0,20),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+            theme_Bede_Map()+
+            geom_sf(data = landmask, fill = "grey")+
+            coord_sf(expand = F,  clip = "off")+
+            theme(
+              legend.position = c(0.05, 0.05),      # Position in normalized coordinates (x=0.1, y=0.1)
+              legend.justification = c(0, 0),
+              legend.background = element_rect(fill = NA, color = NA) # Align legend's bottom-left corner to that point
+            )+
+          annotate(
+            "text",
+            x = -Inf, y = Inf,
+            label = i,
+            hjust = -1.2, vjust = 1.3,
+            size = 10
+          )
+  
+  ggsave(paste0("Outputs/SST/plot/n_event_per_year/","n_event_",i,".png"), plot, width = 10, height = 5.5, dpi = 400)
+}
+```
+
+```{r Plotting intensity_mean}
+
+for(i in dates){
+
+  print(i)  
+
+    data_of_the_year <- all_data %>% 
+      dplyr::filter(year == i) %>% as_tibble()
+  
+  if(nrow(data_of_the_year) != 0){  
+    points_of_the_year <- vect(data_of_the_year, geom = c("x", "y"), crs = crs("EPSG:4326"))
+    
+    intensity_mean <- rasterize(points_of_the_year, template, crs = "EPSG:4326",field = "intensity_mean", background = NA) %>% 
+      crop(mask, mask = T)
+    
+    writeCDF(intensity_mean,paste0("Outputs/SST/nc/intensity_mean/","intensity_mean_",i,".nc"),overwrite = T)
+  }else{
+    
+    intensity_mean <- template$analysed_sst
+    values(intensity_mean) <- 0
+  }
+  
+  plot <- ggplot()+
+            geom_spatraster(data = intensity_mean)+
+            scale_fill_grass_c("Mean \nIntensity \n(°C)",
+                             palette  = "celsius",
+                             use_grass_range = FALSE,
+                             # direction  = 1,
+                             limits = c(0,5),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+            theme_Bede_Map()+
+            geom_sf(data = landmask, fill = "grey")+
+            coord_sf(expand = F,  clip = "off")+
+            theme(
+              legend.position = c(0.05, 0.05),      # Position in normalized coordinates (x=0.1, y=0.1)
+              legend.justification = c(0, 0),
+              legend.background = element_rect(fill = NA, color = NA),
+              plot.background = element_rect(fill = "white")# Align legend's bottom-left corner to that point
+            )+
+          annotate(
+            "text",
+            x = -Inf, y = Inf,
+            label = i,
+            hjust = -1.2, vjust = 1.3,
+            size = 10
+          )
+  
+  ggsave(paste0("Outputs/SST/plot/intensity_mean/","intensity_mean",i,".png"), plot, width = 10, height = 5.5, dpi = 400, background = "white")
+}
+```
+
+```{r Plotting mean_duration}
+
+for(i in dates){
+
+  print(i)  
+
+    data_of_the_year <- all_data %>% 
+      dplyr::filter(year == i) %>% as_tibble()
+  
+  if(nrow(data_of_the_year) != 0){  
+    points_of_the_year <- vect(data_of_the_year, geom = c("x", "y"), crs = crs("EPSG:4326"))
+    
+    duration_mean <- rasterize(points_of_the_year, template, crs = "EPSG:4326",field = "duration_mean", background = NA) %>% 
+      crop(mask, mask = T)
+    
+    writeCDF(duration_mean,paste0("Outputs/SST/nc/duration_mean/","duration_mean_",i,".nc"),overwrite = T)
+  }else{
+    
+    duration_mean <- template$analysed_sst
+    values(duration_mean) <- 0
+  }
+  
+  plot <- ggplot()+
+            geom_spatraster(data = duration_mean)+
+            scale_fill_scico("Mean Duration \n of Events \n(Days)",
+                             palette  = "batlow",
+                             direction  = 1,
+                             limits = c(0,100),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+            theme_Bede_Map()+
+            geom_sf(data = landmask, fill = "grey")+
+            coord_sf(expand = F,  clip = "off")+
+            theme(
+              legend.position = c(0.05, 0.05),      # Position in normalized coordinates (x=0.1, y=0.1)
+              legend.justification = c(0, 0),
+              legend.background = element_rect(fill = NA, color = NA),
+              plot.background = element_rect(fill = "white")# Align legend's bottom-left corner to that point
+            )+
+          annotate(
+            "text",
+            x = -Inf, y = Inf,
+            label = i,
+            hjust = -1.2, vjust = 1.3,
+            size = 10
+          )
+  
+  ggsave(paste0("Outputs/SST/plot/duration_mean/","duration_mean_",i,".png"), plot, width = 10, height = 5.5, dpi = 400, background = "white")
+}
+```
+
+```{r Plotting intensity_cumulative_sum}
+
+for(i in dates){
+
+  print(i)  
+
+    data_of_the_year <- all_data %>% 
+      dplyr::filter(year == i) %>% as_tibble()
+  
+  if(nrow(data_of_the_year) != 0){  
+    points_of_the_year <- vect(data_of_the_year, geom = c("x", "y"), crs = crs("EPSG:4326"))
+    
+    intensity_cumulative_sum <- rasterize(points_of_the_year, template, crs = "EPSG:4326",field = "intensity_cumulative_sum", background = NA) %>% 
+      crop(mask, mask = T)
+    
+    writeCDF(intensity_cumulative_sum,paste0("Outputs/SST/nc/intensity_cumulative_sum/","intensity_cumulative_sum_",i,".nc"),overwrite = T)
+  }else{
+    
+    intensity_cumulative_sum <- template$analysed_sst
+    values(intensity_cumulative_sum) <- 0
+  }
+  
+  plot <- ggplot()+
+            geom_spatraster(data = intensity_cumulative_sum)+
+            scale_fill_grass_c("Cumulative \nIntensity \n(°C)",
+                             palette  = "celsius",
+                             use_grass_range = FALSE,
+                             # direction  = 1,
+                             limits = c(0,600),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+            theme_Bede_Map()+
+            geom_sf(data = landmask, fill = "grey")+
+            coord_sf(expand = F,  clip = "off")+
+            theme(
+              legend.position = c(0.05, 0.05),      # Position in normalized coordinates (x=0.1, y=0.1)
+              legend.justification = c(0, 0),
+              legend.background = element_rect(fill = NA, color = NA),
+              plot.background = element_rect(fill = "white")# Align legend's bottom-left corner to that point
+            )+
+          annotate(
+            "text",
+            x = -Inf, y = Inf,
+            label = i,
+            hjust = -1.2, vjust = 1.3,
+            size = 10
+          )
+  
+  ggsave(paste0("Outputs/SST/plot/intensity_cumulative_sum/","intensity_cumulative_sum_",i,".png"), plot, width = 10, height = 5.5, dpi = 400, background = "white")
+}
+```
+
+```{r Plotting rate_onset}
+
+for(i in dates){
+
+  print(i)  
+
+    data_of_the_year <- all_data %>% 
+      dplyr::filter(year == i) %>% as_tibble()
+  
+  if(nrow(data_of_the_year) != 0){  
+    points_of_the_year <- vect(data_of_the_year, geom = c("x", "y"), crs = crs("EPSG:4326"))
+    
+    rate_onset <- rasterize(points_of_the_year, template, crs = "EPSG:4326",field = "rate_onset", background = NA) %>% 
+      crop(mask, mask = T)
+    
+    writeCDF(rate_onset,paste0("Outputs/SST/nc/rate_onset/","rate_onset_",i,".nc"),overwrite = T)
+  }else{
+    
+    rate_onset <- template$analysed_sst
+    values(rate_onset) <- 0
+  }
+  
+  plot <- ggplot()+
+            geom_spatraster(data = rate_onset)+
+            scale_fill_grass_c("Average Onset \nrate of event \n(°C/day)",
+                             palette  = "celsius",
+                             use_grass_range = FALSE,
+                             # direction  = 1,
+                             limits = c(0,3),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+            theme_Bede_Map()+
+            geom_sf(data = landmask, fill = "grey")+
+            coord_sf(expand = F,  clip = "off")+
+            theme(
+              legend.position = c(0.05, 0.05),      # Position in normalized coordinates (x=0.1, y=0.1)
+              legend.justification = c(0, 0),
+              legend.background = element_rect(fill = NA, color = NA),
+              plot.background = element_rect(fill = "white")# Align legend's bottom-left corner to that point
+            )+
+          annotate(
+            "text",
+            x = -Inf, y = Inf,
+            label = i,
+            hjust = -1.2, vjust = 1.3,
+            size = 10
+          )
+  
+  ggsave(paste0("Outputs/SST/plot/rate_onset/","rate_onset_",i,".png"), plot, width = 10, height = 5.5, dpi = 400, background = "white")
+}
+```
+
+```{r Plotting rate_decline}
+
+for(i in dates){
+
+  print(i)  
+
+    data_of_the_year <- all_data %>% 
+      dplyr::filter(year == i) %>% as_tibble()
+  
+  if(nrow(data_of_the_year) != 0){  
+    points_of_the_year <- vect(data_of_the_year, geom = c("x", "y"), crs = crs("EPSG:4326"))
+    
+    rate_decline <- rasterize(points_of_the_year, template, crs = "EPSG:4326",field = "rate_decline", background = NA) %>% 
+      crop(mask, mask = T)
+    
+    writeCDF(rate_decline,paste0("Outputs/SST/nc/rate_decline/","rate_decline_",i,".nc"),overwrite = T)
+  }else{
+    
+    rate_decline <- template$analysed_sst
+    values(rate_decline) <- 0
+  }
+  
+  plot <- ggplot()+
+            geom_spatraster(data = rate_decline)+
+            scale_fill_grass_c("Average decline \nrate of event \n(°C/day)",
+                             palette  = "celsius",
+                             use_grass_range = FALSE,
+                             # direction  = 1,
+                             limits = c(0,3),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+            theme_Bede_Map()+
+            geom_sf(data = landmask, fill = "grey")+
+            coord_sf(expand = F,  clip = "off")+
+            theme(
+              legend.position = c(0.05, 0.05),      # Position in normalized coordinates (x=0.1, y=0.1)
+              legend.justification = c(0, 0),
+              legend.background = element_rect(fill = NA, color = NA),
+              plot.background = element_rect(fill = "white")# Align legend's bottom-left corner to that point
+            )+
+          annotate(
+            "text",
+            x = -Inf, y = Inf,
+            label = i,
+            hjust = -1.2, vjust = 1.3,
+            size = 10
+          )
+  
+  ggsave(paste0("Outputs/SST/plot/rate_decline/","rate_decline_",i,".png"), plot, width = 10, height = 5.5, dpi = 400, background = "white")
+}
+```
+
+```{r Plotting intensity_mean_abs}
+
+for(i in dates){
+
+  print(i)  
+
+    data_of_the_year <- all_data %>% 
+      dplyr::filter(year == i) %>% as_tibble()
+  
+  if(nrow(data_of_the_year) != 0){  
+    points_of_the_year <- vect(data_of_the_year, geom = c("x", "y"), crs = crs("EPSG:4326"))
+    
+    intensity_mean_abs <- rasterize(points_of_the_year, template, crs = "EPSG:4326",field = "intensity_mean_abs", background = NA) %>% 
+      crop(mask, mask = T)
+    
+    writeCDF(intensity_mean_abs,paste0("Outputs/SST/nc/intensity_mean_abs/","intensity_mean_abs_",i,".nc"),overwrite = T)
+  }else{
+    
+    intensity_mean_abs <- template$analysed_sst
+    values(intensity_mean_abs) <- 0
+  }
+  
+  plot <- ggplot()+
+            geom_spatraster(data = intensity_mean_abs)+
+            scale_fill_grass_c("Mean \nIntensity \nRelative to \nthe Climatology \n(°C)",
+                             palette  = "celsius",
+                             use_grass_range = FALSE,
+                             # direction  = 1,
+                             limits = c(8,30),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+            theme_Bede_Map()+
+            geom_sf(data = landmask, fill = "grey")+
+            coord_sf(expand = F,  clip = "off")+
+            theme(
+              legend.position = c(0.05, 0.05),      # Position in normalized coordinates (x=0.1, y=0.1)
+              legend.justification = c(0, 0),
+              legend.background = element_rect(fill = NA, color = NA),
+              plot.background = element_rect(fill = "white")# Align legend's bottom-left corner to that point
+            )+
+          annotate(
+            "text",
+            x = -Inf, y = Inf,
+            label = i,
+            hjust = -1.2, vjust = 1.3,
+            size = 10
+          )
+  
+  ggsave(paste0("Outputs/SST/plot/intensity_mean_abs/","intensity_mean_abs",i,".png"), plot, width = 10, height = 5.5, dpi = 400, background = "white")
+}
+```
+
+
+TRENDS of HW Metrics
+
+```{r Trends HW opti}
+library(progressr)
+
+list_of_folder <- list.files("Outputs/SST/nc/",include.dirs = T, full.names = T)
+
+for (folder in 2:length(list_of_folder)){
+  
+  print(gsub(".*/","",list_of_folder[folder]))
+  
+  nc_files <- list.files(list_of_folder[folder], pattern = ".nc", full.names = T)
+  
+  stk <- rast(nc_files)
+  
+  df <- as.data.frame(stk, xy = T) %>% 
+    setNames(c("x","y", as.character(1982:2024))) 
+  
+
+  # Set up a multisession plan for parallel processing
+  plan(multisession)
+  
+  # Create a progress handler (you can choose a different handler if desired)
+  handlers("txtprogressbar")
+  
+  # Define your pixel processing function (unchanged)
+  process_pixel <- function(pixel_row) {
+    pixel_i <- as.data.frame(t(pixel_row))
+    names(pixel_i) <- names(df)
+    
+    pixel_i <- pixel_i %>%
+      as.data.frame() %>%
+      pivot_longer(-c(x, y), names_to = "Date", values_to = "value") %>%
+      mutate(value = ifelse(is.na(value), 0, value),
+             Date = as.numeric(Date))
+    
+    HW_ts <- ts(pixel_i$value, start = min(pixel_i$Date), frequency = 1)
+    
+    pvalue <- tryCatch(mk.test(HW_ts)$p.value, error = function(e) NA)
+    
+    if (!is.na(pvalue) && pvalue <= 0.05) {
+      sen_coeffs <- tryCatch(zyp.sen(value ~ Date, data = pixel_i)$coefficients,
+                             error = function(e) c("(Intercept)" = NA, "Date" = NA))
+      return(c(pvalue = pvalue, Sen_intercept = sen_coeffs[1], Sen_Slope = sen_coeffs[2]))
+    } else {
+      return(c(pvalue = pvalue, Sen_intercept = NA, Sen_Slope = NA))
+    }
+  }
+  
+  # Wrap your future_apply call in a progressr with_progress block
+  results <- with_progress({
+    # Create a progressor that knows the number of rows
+    p <- progressor(along = 1:nrow(df))
+    
+    # Use future_apply; call p() inside the anonymous function for each row processed
+    future_apply(df, 1, function(pixel_row) {
+      p()  # update the progress bar
+      process_pixel(pixel_row)
+    })
+  })
+  
+  results_df <- results %>% 
+    t() %>% 
+    as.data.frame() 
+  
+  # Combine the results back into df
+  df$pvalue <- results_df[,1]
+  df$Sen_intercept <- results_df[,2]
+  df$Sen_Slope <- results_df[,3]
+
+  print("Saving CSV")
+  write.csv(df,paste0("Outputs/SST/Trends_HW/Trends_",gsub(".*/","",list_of_folder[folder]),".csv"))
+}
+
+
+```
+
+```{r GIF making}
+
+library(tidyverse)
+
+files <- fs::dir_ls("Outputs/SST/plot/intensity_cumulative_sum",glob="*.png")
+
+num <- as.numeric(str_extract(files, "\\d+"))
+                  
+frame <- tibble(files, num) %>% arrange(num)
+
+gifski::gifski(frame$files, gif_file = "Outputs/SST/plot/intensity_cumulative_sum/GIF/intensity_cumulative_sum.gif",
+               delay = 0.5, loop = TRUE, progress = TRUE,width=1920,height=1080)
+
+```
+
+
+
+
+

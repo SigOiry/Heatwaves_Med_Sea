@@ -1,0 +1,117 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r library}
+library(tidyverse)
+library(Utilities.Package)
+library(trend)
+library(zyp)
+```
+
+```{r data opening and formating}
+
+df <- read.csv("Data/Chl_Med_Sea.csv") %>% 
+  dplyr::filter(!is.nan(Chl_AVG)) %>% 
+  mutate(Day = substr(Date,1,2),
+         Month = case_when(substr(Date,4,6) == "Jan" ~ "01",
+                           substr(Date,4,6) == "Feb" ~ "02",
+                           substr(Date,4,6) == "Mar" ~ "03",
+                           substr(Date,4,6) == "Apr" ~ "04",
+                           substr(Date,4,6) == "May" ~ "05",
+                           substr(Date,4,6) == "Jun" ~ "06",
+                           substr(Date,4,6) == "Jul" ~ "07",
+                           substr(Date,4,6) == "Aug" ~ "08",
+                           substr(Date,4,6) == "Sep" ~ "09",
+                           substr(Date,4,6) == "Oct" ~ "10",
+                           substr(Date,4,6) == "Nov" ~ "11",
+                           substr(Date,4,6) == "Dec" ~ "12"),
+         Year = substr(Date,8,11), 
+         Date = as.Date(paste(Day,Month,Year), "%d %m %Y"),
+         DOY =  yday(Date)) %>% 
+  dplyr::select(-c(Day, Month, Year)) %>% 
+  tibble()
+
+```
+
+```{r Daily Climatology}
+
+clim <- df %>% 
+  pivot_longer(-c(Date,DOY), names_to = "metric", values_to = "values") %>% 
+  group_by(DOY, metric) %>% 
+  reframe(clim = mean(values),
+          sd_clim = sd(values))
+
+clim %>% 
+  dplyr::filter(metric == "Chl_GEOM") %>% 
+ggplot(aes(x = DOY, y = clim)) +
+  geom_line(color = "blue") +
+  geom_ribbon(aes(ymin = clim - sd_clim, ymax = clim + sd_clim), alpha = 0.2, fill = "blue") +
+  labs(x = "Day of Year", y = "Chl_AVG Climatology") +
+  theme_minimal()
+
+clim <- clim %>% 
+  dplyr::select(-sd_clim)
+
+```
+
+```{r Daily Anomaly}
+
+Anomaly <- df %>% 
+  pivot_longer(-c(Date,DOY), names_to = "metric", values_to = "Raw_values") %>% 
+  left_join(clim, by = c("metric","DOY")) %>% 
+  mutate(Anomaly = (Raw_values-clim),
+         Day_Number = as.numeric(Date - as.Date("1998-01-01")))
+
+Anomaly %>% 
+  dplyr::filter(metric == "Chl_MED") %>% 
+  ggplot(aes(x = Date, y = Anomaly))+
+  geom_point(size = 2, alpha = 0.6, color = "grey")+
+  scale_x_date(date_breaks = "2 years",date_labels = "%Y", expand = c(0, 0) )+
+  ylab(expression("AVG Chl-a anomaly (mg.m"^-3*")"))+
+  geom_smooth(method = "lm", color = "black")+
+  theme_bw()
+```
+
+```{r Linear model anomalies }
+
+Anomaly_AVG <- Anomaly %>% 
+  dplyr::filter(metric == "Chl_AVG") 
+Anomaly_GEOM <- Anomaly %>% 
+  dplyr::filter(metric == "Chl_GEOM") 
+Anomaly_MED <- Anomaly %>% 
+  dplyr::filter(metric == "Chl_MED") 
+  
+lm_AVG <- lm(Anomaly~Day_Number, Anomaly_AVG) %>% 
+  summary()
+
+lm_GEOM <- lm(Anomaly~Day_Number, Anomaly_GEOM) %>% 
+  summary()
+
+lm_MED <- lm(Anomaly~Day_Number, Anomaly_MED) %>% 
+  summary()
+
+```
+
+```{r Mann-Kendall trend of Anomalies}
+
+mk.test(Anomaly_AVG$Anomaly)
+mk.test(Anomaly_GEOM$Anomaly)
+mk.test(Anomaly_MED$Anomaly)
+```
+
+```{r Sen's Slope}
+Sen_AVG <- zyp.sen(Anomaly ~ Day_Number, data = Anomaly_AVG)
+Sen_GEOM <- zyp.sen(Anomaly ~ Day_Number, data = Anomaly_GEOM)
+Sen_MED <- zyp.sen(Anomaly ~ Day_Number, data = Anomaly_MED)
+
+Sen_AVG 
+Sen_GEOM
+Sen_MED 
+```
+
+
+
+
+

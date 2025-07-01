@@ -1,0 +1,73 @@
+---
+title: "Untitled"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r library}
+library(tidyverse)
+```
+
+```{r data opening and filtering}
+df_AVG <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_AVG.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+
+df_GEOM <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_GEOM.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+
+df_MED <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_MED.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+```
+
+```{r Transform dataset to long format}
+
+# df_AVG_long <- df_AVG %>% 
+#   pivot_longer(-c(lat,lon), names_to = "YEAR", values_to = "value") %>% 
+#   mutate(YEAR = substr(YEAR, 2,5),
+#          metric = "AVG")
+
+df_GEOM_long <- df_GEOM %>% 
+  mutate(ID = c(1:n())) %>% 
+  pivot_longer(-c(lat,lon, ID), names_to = "YEAR", values_to = "value") %>% 
+  mutate(YEAR = as.numeric(substr(YEAR, 2,5)),
+         metric = "GEOM") 
+  
+
+# df_MED_long <- df_MED %>% 
+#   pivot_longer(-c(lat,lon), names_to = "YEAR", values_to = "value") %>% 
+#   mutate(YEAR = substr(YEAR, 2,5),
+#          metric = "MED")
+# 
+# df_all_long <- df_AVG_long %>% 
+#   dplyr::filter(metric == "GEOM") %>% 
+#   rbind(df_GEOM_long,df_MED_long) 
+#   # group_by(lat,lon) %>% 
+#   # mutate(ID = 1:n())
+
+```
+
+```{r Test}
+
+library(brms)
+
+test <- df_GEOM_long %>% 
+  dplyr::filter(ID < 1000)
+
+ summary(lm(value ~ YEAR, data = test))
+
+model_gam_trends <- brm(
+  formula = bf(value ~ YEAR+(0+ID|ID)),
+  data = df_GEOM_long, 
+  family = gaussian(), 
+  cores = 8, 
+  iter = 200,
+  warmup = 20, 
+  control = list(adapt_delta = 0.9999),
+  file = "Outputs/GAM/GLMM_200_gaussian"
+  )
+
+plot(model_gam_trends)
+```
+

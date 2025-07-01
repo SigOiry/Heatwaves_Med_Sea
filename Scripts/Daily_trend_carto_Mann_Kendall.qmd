@@ -1,0 +1,137 @@
+---
+title: "Untitled"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r library}
+library(tidyverse)
+library(trend)
+library(zyp)
+library(mapdata)
+library(terra)
+
+```
+
+```{r data opening and filtering}
+df_AVG <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_AVG.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+
+df_GEOM <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_GEOM.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+
+df_MED <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_MED.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+```
+
+```{r Transform dataset to long format}
+
+# df_AVG_long <- df_AVG %>% 
+#   pivot_longer(-c(lat,lon), names_to = "YEAR", values_to = "value") %>% 
+#   mutate(YEAR = substr(YEAR, 2,5),
+#          metric = "AVG")
+
+df_GEOM_long <- df_GEOM %>% 
+  mutate(ID = c(1:n())) %>% 
+  pivot_longer(-c(lat,lon, ID), names_to = "YEAR", values_to = "value") %>% 
+  mutate(YEAR = as.numeric(substr(YEAR, 2,5))) 
+  
+
+# df_MED_long <- df_MED %>% 
+#   pivot_longer(-c(lat,lon), names_to = "YEAR", values_to = "value") %>% 
+#   mutate(YEAR = substr(YEAR, 2,5),
+#          metric = "MED")
+# 
+# df_all_long <- df_AVG_long %>% 
+#   dplyr::filter(metric == "GEOM") %>% 
+#   rbind(df_GEOM_long,df_MED_long) 
+#   # group_by(lat,lon) %>% 
+#   # mutate(ID = 1:n())
+
+```
+
+```{r Mann_Kendal and Sen Slope}
+
+df_geom_wide <- df_GEOM_long %>% 
+  pivot_wider(names_from = YEAR, values_from = value)
+
+df_geom_wide$p_value <- NA
+df_geom_wide$Sen_Slope <- NA
+df_geom_wide$Sen_intercept <- NA
+
+for(i in 1:nrow(df_geom_wide)){
+  print(i)
+  df_i <- df_geom_wide[i,] %>% 
+    dplyr::select(-c("p_value","Sen_Slope","Sen_intercept")) %>% 
+    pivot_longer(-c(lat,lon,ID), names_to = "YEAR", values_to = "value") %>% 
+    mutate(YEAR = as.numeric(YEAR))
+
+  chla_ts <- ts(df_i$value, start = min(df_i$YEAR), frequency = 1)
+  
+  pvalue <- mk.test(chla_ts)$p.value
+  df_geom_wide$p_value[i] <- pvalue
+  
+  if(pvalue <=0.05){
+    sen_coeffs <- zyp.sen(value ~ YEAR, data = df_i)$coefficients
+    
+    df_geom_wide$Sen_Slope[i] <- sen_coeffs[2] %>% as.numeric()
+    df_geom_wide$Sen_intercept[i] <- sen_coeffs[1] %>% as.numeric()
+  }else{
+    df_geom_wide$Sen_Slope[i] <- NA
+    df_geom_wide$Sen_intercept[i] <- NA
+  }
+  
+}
+
+write.csv(df_geom_wide, "Outputs/Trend_MedSea_GEOM.csv", row.names = F)
+```
+
+
+```{r ggplot}
+df_geom_wide_zeros <- df_geom_wide %>% 
+  mutate(Sen_Slope = case_when(is.na(Sen_Slope) ~ 0,
+                               T ~ Sen_Slope))
+
+df_geom_wide_zeros %>% 
+  ggplot()+
+  geom_tile(aes(x = lon, y = lat, fill = Sen_Slope))+
+  scale_fill_distiller(palette = "BrBG", direction = -1, 
+                       limits = c(-0.002, 0.002),  # Ensuring range covers mean and max
+                       oob = scales::squish) +
+  theme_minimal()  
+
+```
+
+```{r Raster creation}
+library(raster)
+
+template <- rast("Data/19980101_001_CHL_OCEANCOLOUR_MED_BGC_L4_MY_009_144.nc")
+values(template) <- NA
+
+
+raster_obj <- df_geom_wide_zeros %>% 
+  rename(x = "lon",
+         y = "lat") %>% 
+  dplyr::select(x,y,p_value,Sen_Slope,Sen_intercept)
+
+
+
+points <- vect(raster_obj, geom = c("x", "y"), crs = crs("EPSG:4326"))
+
+p_value <- rasterize(points, template, crs = "EPSG:4326",field = "p_value", fun = "mean")
+names(p_value)<- "p_value"
+
+Sen_Slope <- rasterize(points, template, crs = "EPSG:4326",field = "Sen_Slope", fun = "mean")
+names(Sen_Slope)<- "Sen_Slope"
+
+Sen_intercept <- rasterize(points, template, crs = "EPSG:4326",field = "Sen_intercept", fun = "mean")
+names(Sen_intercept)<- "Sen_intercept"
+
+stk <- c(p_value,Sen_Slope,Sen_intercept)
+
+writeRaster(stk, "Outputs/Trends_MedSea_Rast/Trends_Kendall_Sen.tif")
+```
+
+

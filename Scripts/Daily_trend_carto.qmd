@@ -1,0 +1,60 @@
+---
+title: "Untitled"
+format: html
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r library}
+library(tidyverse)
+```
+
+```{r data opening and filtering}
+df_AVG <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_AVG.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+
+df_GEOM <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_GEOM.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+
+df_MED <- read.csv("Data/Trend_mapping/Chl_Med_Sea_for_trend_mapping_MED.csv") %>% 
+  dplyr::filter(!is.nan(X1998))
+```
+
+```{r Transform dataset to long format}
+
+df_AVG_long <- df_AVG %>% 
+  pivot_longer(-c(lat,lon), names_to = "YEAR", values_to = "value") %>% 
+  mutate(YEAR = substr(YEAR, 2,5),
+         metric = "AVG")
+
+df_GEOM_long <- df_GEOM %>% 
+  pivot_longer(-c(lat,lon), names_to = "YEAR", values_to = "value") %>% 
+  mutate(YEAR = substr(YEAR, 2,5) ,
+         metric = "GEOM")
+
+df_MED_long <- df_MED %>% 
+  pivot_longer(-c(lat,lon), names_to = "YEAR", values_to = "value") %>% 
+  mutate(YEAR = substr(YEAR, 2,5),
+         metric = "MED")
+
+df_all_long <- df_AVG_long %>% 
+  dplyr::filter(metric == "GEOM") %>% 
+  rbind(df_GEOM_long,df_MED_long) 
+  # group_by(lat,lon) %>% 
+  # mutate(ID = 1:n())
+
+```
+
+
+```{r Test}
+
+
+test <- df_all_long[1:10,]
+
+test %>% 
+  group_by(metric,lat,lon) %>% 
+  reframe()
+
+```
+

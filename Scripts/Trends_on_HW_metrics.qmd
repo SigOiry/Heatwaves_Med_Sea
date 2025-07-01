@@ -1,0 +1,39 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r library}
+
+library(tidyverse)
+library(tidyterra)
+library(rstudioapi)
+
+setwd(selectDirectory())
+```
+
+
+```{r Trends Plotting}
+
+Trends_duration <- read.csv("Outputs/SST/Trends_HW/Trends_intensity_mean.csv") %>% 
+  dplyr::select(x,y,pvalue,Sen_intercept, Sen_Slope)
+         
+ Trends_duration %>%         
+  ggplot()+
+  geom_tile(aes(x = x, y = y, fill = Sen_Slope))+
+            scale_fill_grass_c(palette  = "celsius",
+                             use_grass_range = FALSE,
+                             # direction  = 1,
+                             # limits = c(0.0001,0.5),
+                             na.value = NA,
+                             guide = guide_colourbar(
+                              title.position = "left",   # Title to the left of the colorbar
+                              title.hjust = 0.5            # Left-justify the title
+                             )
+            )+
+  coord_cartesian()+
+   theme_minimal()  
+
+
+```
+
