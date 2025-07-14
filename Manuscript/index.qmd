@@ -108,13 +108,22 @@ library(rnaturalearth)
 library(rnaturalearthdata)
 library(tidyverse)
 
-region_col <- c("Adriatic Sea" = "#564062",
-                "Ionian Sea and the Central Mediterranean Sea" = "#C79E4E",
-                "Western Mediterranean Sea" = "#923535",
-                "Aegean-Levantine Sea" = "#147113")
+region_col <- c(
+  "Levantine Sea" = "#147113",  # pine green (was used for Aegean-Levantine before)
+  "Alboran Sea"   = "#465074",  # slate blue
+  "Balearic Sea"  = "#9C8547",  # dusty mustard
+  "Algerian Sea"  = "#7A2F2F",  # chestnut
+  "Sea of Sicily" = "#C79E4E",  # warm ochre
+  "Gulf of Lyon"  = "#2E636E",  # muted teal
+  "Adriatic sea"  = "#564062",  # muted indigo
+  "Tyrrhenian Sea"= "#923535",  # deep brick red
+  "Ionian Sea"    = "#6A5847",  # earthy taupe
+  "Aegean Sea"    = "#0F5A12"   # forest green
+)
+
 
 # Load your shapefile (replace with your path)
-med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
   dplyr::filter(!str_detect(name, "Black"))
 
 # Get world land polygons
@@ -571,10 +580,19 @@ library(ggspatial)
 library(Utilities.Package)
 
 
-region_col <- c("Adriatic Sea" = "#564062",
-                "Ionian Sea and the Central Mediterranean Sea" = "#C79E4E",
-                "Western Mediterranean Sea" = "#923535",
-                "Aegean-Levantine Sea" = "#147113")
+region_col <- c(
+  "Levantine Sea" = "#147113",  # pine green (was used for Aegean-Levantine before)
+  "Alboran Sea"   = "#465074",  # slate blue
+  "Balearic Sea"  = "#9C8547",  # dusty mustard
+  "Algerian Sea"  = "#7A2F2F",  # chestnut
+  "Sea of Sicily" = "#C79E4E",  # warm ochre
+  "Gulf of Lyon"  = "#2E636E",  # muted teal
+  "Adriatic sea"  = "#564062",  # muted indigo
+  "Tyrrhenian Sea"= "#923535",  # deep brick red
+  "Ionian Sea"    = "#6A5847",  # earthy taupe
+  "Aegean Sea"    = "#0F5A12"   # forest green
+)
+
 # Load your shapefile (replace with your path)
 med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
   dplyr::filter(!str_detect(name, "Black"))
