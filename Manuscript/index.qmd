@@ -107,20 +107,27 @@ library(ggplot2)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(tidyverse)
+library(ggspatial)
 
 region_col <- c(
-  "Levantine Sea" = "#147113",  # pine green (was used for Aegean-Levantine before)
-  "Alboran Sea"   = "#465074",  # slate blue
-  "Balearic Sea"  = "#9C8547",  # dusty mustard
-  "Algerian Sea"  = "#7A2F2F",  # chestnut
-  "Sea of Sicily" = "#C79E4E",  # warm ochre
-  "Gulf of Lyon"  = "#2E636E",  # muted teal
-  "Adriatic sea"  = "#564062",  # muted indigo
-  "Tyrrhenian Sea"= "#923535",  # deep brick red
-  "Ionian Sea"    = "#6A5847",  # earthy taupe
-  "Aegean Sea"    = "#0F5A12"   # forest green
+  # greens
+  "Levantine Sea" = "#008F1A",   # brighter pine-green
+  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
+  
+  # blues / teals / purples
+  "Alboran Sea"   = "#414E7C",   # richer slate-blue
+  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
+  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
+  
+  # yellows / ochres
+  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
+  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
+  
+  # reds / oranges / browns
+  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
+  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
+  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
 )
-
 
 # Load your shapefile (replace with your path)
 med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
@@ -136,18 +143,51 @@ plot_medsea <- ggplot() +
   # Plot Mediterranean regions, each with a different color
   geom_sf(data = med_regions, aes(fill = name), color = "black", alpha = 0.8) +
   # Customize colors
-  scale_fill_manual(name = "",values = region_col) +
-  # Coordinate limits to focus on Mediterranean
+  scale_fill_manual(name = "",values = region_col)  +
+    ## ── horizontal guide with title on top ──────────────────────
+  guides(
+    fill = guide_legend(
+      ncol = 1,
+      byrow      = TRUE,
+      title.position = "top",
+      label.position = "right",            # optional – labels below bar
+      barwidth       = unit(0.7, "cm"),       # tweak length
+      barheight      = unit(0.7, "cm")# tweak thickness
+    )
+  ) +
+  ## ── map extent ──────────────────────────────────────────────
   coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
-  # Customize theme
+  ## ── *** scale bar *** ───────────────────────────────────────
+  annotation_scale(
+    location   = "bl",   # bottom-left
+    width_hint = 0.25,   # ≈25 % of the map width
+    line_width = 0.6,
+    text_cex   = 2,
+    pad_x      = unit(0.4, "cm"),
+    pad_y      = unit(0.4, "cm")
+  ) +
+  ## ── theme ───────────────────────────────────────────────────
   theme_minimal(base_size = 18) +
   theme(
-    panel.grid = element_line(color = "gray90"),
-    panel.background = element_rect(fill = "aliceblue"),
-    plot.background = element_rect(fill = "white",color = NA),
-    legend.text = element_text(size = 13),
-    legend.position = "top"
+    panel.grid        = element_line(color = "gray90"),
+    panel.background  = element_rect(fill = "aliceblue"),
+    plot.background   = element_rect(fill = "white", color = NA),
+
+    # move legend INSIDE, upper-left; anchor by its top-left corner
+    legend.position       = c(0.02, 0.98),   # npc coords (x = 2 %, y = 98 %)
+    legend.justification  = c(0, 1),
+    # legend.direction      = "horizontal",
+    legend.direction      = "vertical",      # keeps items vertical
+    legend.title.align    = 0.5,             # centre title
+    legend.text           = element_text(size = 13),
+    legend.title = element_blank(),
+
+    # give legend a white background & a bit of padding
+    legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA,linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4)
   )
+
+plot_medsea
 
 ggsave("Manuscript/Figs/Map_MedSea.png", plot_medsea, dpi = 300, height =645*3, width = 1319*3, units = "px")
 ```
@@ -185,10 +225,25 @@ library(ggspatial)
 library(Utilities.Package)
 
 
-region_col <- c("Adriatic Sea" = "#564062",
-                "Ionian Sea and the Central Mediterranean Sea" = "#C79E4E",
-                "Western Mediterranean Sea" = "#923535",
-                "Aegean-Levantine Sea" = "#147113")
+region_col <- c(
+  # greens
+  "Levantine Sea" = "#008F1A",   # brighter pine-green
+  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
+  
+  # blues / teals / purples
+  "Alboran Sea"   = "#414E7C",   # richer slate-blue
+  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
+  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
+  
+  # yellows / ochres
+  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
+  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
+  
+  # reds / oranges / browns
+  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
+  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
+  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
+)
 # Load your shapefile (replace with your path)
 med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
   dplyr::filter(!str_detect(name, "Black"))
@@ -209,7 +264,7 @@ stk <- filelist$path %>%
   rast()
 names(stk) <- filelist$year
 
-stk_avg <- mean(stk)
+stk_avg <- mean(stk, na.rm = T)
 
 map_n_event <- ggplot() +
   ## ── data layers ─────────────────────────────────────────────
@@ -267,6 +322,8 @@ ggsave("Manuscript/Figs/Map_MedSea_n_event.png", map_n_event, dpi = 300, height 
 
 ############ Line plot by region
 med_regions <- st_transform(med_regions, crs(stk))
+
+med_regions <- lwgeom::st_make_valid(med_regions)
 
 zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
 
