@@ -245,7 +245,7 @@ region_col <- c(
   "Ionian Sea"    = "#705943"    # warmer earthy-taupe
 )
 # Load your shapefile (replace with your path)
-med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
   dplyr::filter(!str_detect(name, "Black"))
 
 # Get world land polygons
@@ -323,10 +323,10 @@ ggsave("Manuscript/Figs/Map_MedSea_n_event.png", map_n_event, dpi = 300, height 
 ############ Line plot by region
 med_regions <- st_transform(med_regions, crs(stk))
 
-med_regions <- lwgeom::st_make_valid(med_regions)
+# med_regions <- st_zm(med_regions)
 
 zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
-
+plot(zone_rast)
 # Function that terra::zonal will apply: returns a 3-element vector
 qfun <- function(values, ...) {
   mean(values, na.rm = TRUE)
@@ -345,20 +345,22 @@ z_df <- as.data.frame(z_raw)  %>%
 
 
 plot_lines <- ggplot(z_df, aes(x = year, y = mean, colour = region)) +
-  geom_point(alpha = 0.2) +
-  geom_line(alpha = 0.2) +
+  geom_point(alpha = 0.2, show.legend = F) +
+  geom_line(alpha = 0.2, show.legend = F) +
   scale_colour_manual(values = region_col) +
 
   geom_smooth(
     method    = "gam",
     linewidth = 1.2,
-    alpha     = 0.15
-  ) +
+    alpha     = 0.05,
+    formula     = (y) ~ s(x, k = 3),  # <-- k goes here
+    show.legend = F) +
 
   ## ── 1. force a ONE-column legend ────────────────────────────
   guides(
     colour = guide_legend(ncol = 1)   # 1 column, items stacked
   ) +
+  ylim(c(0,11.25))+
 
   labs(colour = "Regions", x = "Year", y = "Average number of HW event") +
 
@@ -376,6 +378,8 @@ plot_lines <- ggplot(z_df, aes(x = year, y = mean, colour = region)) +
 
     legend.key.width      = unit(2, "cm")    # leave if you want wider keys
   )
+
+plot_lines
 
 ggsave("Manuscript/Figs/line_n_event.png", plot_lines, dpi = 300, height =575*3, width = 1319*3, units = "px")
 ###################### MAP of TREND
@@ -528,7 +532,7 @@ vals <- terra::extract(r, vect(reg))            # vect() converts sf → SpatVec
 # Suppose your regions layer has a column called "NAME"
 ID_name <- reg %>% 
       as_tibble() %>%  
-      dplyr::mutate(ID = c(1:4))  %>%       # ensure matching ID
+      dplyr::mutate(ID = c(1:10))  %>%       # ensure matching ID
       dplyr::select(ID, name)
 
 vals <- vals %>% 
@@ -542,8 +546,9 @@ plot_boxplot <- ggplot() +
     data          = vals,
     aes(x = name, y = mean, fill = name),
     colour        = "black",
-    linewidth     = .4,
-    alpha         = .60,
+    linewidth     = 0.7,
+    # size = 2,
+    # alpha         = .60,
     outlier.shape = 21,
     outlier.fill  = NA,
     show.legend   = FALSE
@@ -565,7 +570,7 @@ plot_boxplot <- ggplot() +
   scale_colour_manual(values = region_col, guide = "none") +
 
   guides(fill = guide_legend(
-    ncol       = 1,                 # 1 column ⇒ 4 rows
+    nrow       = 2,                 # 1 column ⇒ 4 rows
     byrow      = TRUE,
     keywidth   = unit(0.6, "cm"),   # square keys
     keyheight  = unit(0.6, "cm")
@@ -580,7 +585,7 @@ plot_boxplot <- ggplot() +
     plot.background   = element_rect(fill = "white", colour = NA),
     legend.text       = element_text(size = 13),
 
-    legend.position       = c(0.02, 0.25),   # (x, y) in npc units
+    legend.position       = c(0.02, 0.15),   # (x, y) in npc units
     legend.justification  = c(0, 1),         # anchor by its top-left corner
     legend.direction      = "vertical",      # keeps items vertical
     legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
@@ -588,7 +593,10 @@ plot_boxplot <- ggplot() +
 
     legend.key.width      = unit(2, "cm"),    # leave if you want wider keys
     axis.text.x = element_blank()
-  )
+  )+
+  ylim(c(0,0.23))
+
+plot_boxplot
 
 ggsave("Manuscript/Figs/trend_boxplot.png", plot_boxplot, dpi = 300, height =575*3, width = 1319*3, units = "px")
 ```
