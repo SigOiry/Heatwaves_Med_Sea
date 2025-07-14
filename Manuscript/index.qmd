@@ -1,0 +1,950 @@
+---
+title: Marine Heatwaves in the Med Sea
+subtitle: A temporale analysis
+author:
+  - name: Simon Oiry^[Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France]
+    orcid: 0000-0001-7161-5246
+    corresponding: true
+    email: oirysimon@gmail.com
+    roles:
+      - Investigation
+      - Writing
+      - Data acquisition
+    affiliations:
+      - Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France
+      - Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy
+  - name: Maria Laura Zoffoli^[Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy]
+    orcid: 0000-0003-1892-0051
+    corresponding: false
+    roles: 
+      - Data acquisition
+      - Revision
+    affiliations:
+      - Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy
+  - name: Laurent Barillé^[Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France]
+    orcid: 0000-0001-5138-2684
+    corresponding: false
+    roles: 
+      - Investigation
+      - Data acquisition
+      - Revision
+    affiliations:
+      - Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France  
+abstract: |
+  TBD
+keywords: 
+  - Remote Sensing
+  - Heatwaves
+date: last-modified
+bibliography: library.bib
+citation:
+  container-title: Remote Sensing of Environment
+number-sections: true
+notebook-links: false
+editor_options: 
+  chunk_output_type: console
+csl: RSE.csl
+---
+
+```{r library}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: true
+
+library(tidyverse)
+library(tidyterra)
+library(terra)
+library(patchwork)
+library(png)
+library(gridExtra)
+library(ggnewscale)
+library(ggspatial)
+library(ggrastr)
+library(Utilities.Package)
+```
+
+# Introduction 
+
+Marine heatwaves (MHWs) are discrete and prolonged periods of anomalously high sea temperatures that significantly exceed historical baseline conditions. Specifically, a marine heatwave is generally defined as an event lasting five or more consecutive days during which sea temperatures exceed the 90th percentile threshold based on a 30-year historical climatological period (@fig-HW_explain). These events can vary in terms of duration, intensity, and spatial extent, making a flexible yet rigorous approach necessary for accurate characterization and comparison.
+
+```{r FIG_HW}
+#| cache: false
+#| echo: false
+#| warning: false
+#| fig-cap: "Exemple of heatwaves detection in Quiberon, France during the summer 2021"
+#| label: fig-HW_explain
+#| out-width: "100%"
+
+knitr::include_graphics("Figs/plot_Tmax_flame.png")
+
+```
+
+The importance of studying marine heatwaves arises from their profound ecological and socioeconomic impacts. They have been associated with widespread disruptions to marine ecosystems, including shifts in species distribution, local extinctions, significant mortality events, and changes in primary productivity. Such ecological disturbances subsequently affect fisheries, aquaculture, and biodiversity, highlighting the broad-reaching implications of these events.
+
+The Mediterranean Sea, characterized as a climate change hotspot, has witnessed an increased frequency and intensity of marine heatwaves, especially over recent decades. Mediterranean MHWs often coincide with atmospheric heatwaves, further exacerbating their intensity and ecological impacts. Concurrent atmospheric and marine heatwaves amplify sea surface temperature anomalies, leading to intense ocean stratification and extensive ecological disruption, including mass mortalities of benthic invertebrates and seagrass decline.
+
+In the Mediterranean, particularly in the Adriatic Sea, studies have documented variable responses of primary productivity to MHW events. In coastal and eutrophic regions, such as areas influenced by riverine nutrient input, MHWs have resulted in increased phytoplankton biomass. Conversely, offshore and oligotrophic regions typically exhibit reduced chlorophyll-a concentrations during heatwaves, indicating a potential decline in phytoplankton productivity. Such spatial heterogeneity emphasizes the complexity of ecological responses and underscores the importance of localized assessments.
+
+Understanding marine heatwaves, particularly in sensitive regions like the Mediterranean Sea, is crucial for developing informed management strategies aimed at mitigating their ecological and socioeconomic consequences. This necessity is heightened by projections indicating further increases in MHW frequency, duration, and intensity, driven by ongoing climate change.
+
+# Material & Methods 
+
+Daily Sea Surface Temperature (SST) time series for the Mediterranean Sea, spanning from 1982 onwards, were obtained from the Copernicus Marine Environment Monitoring Service (CMEMS) platform [@Copernicus_Sentinel; @pisano2016new; @embury2024satellite]. Heatwave events were detected using the HeatwaveR package in R [@heatwaveR], adhering to the marine heatwave definition provided by @hobday2016hierarchical and @hobday2018categorizing.
+
+To establish a reference climatology, the first 30 years of the dataset were utilized for each pixel within the Mediterranean Sea. Daily SST values were subsequently compared against this baseline climatology. A heatwave event was identified whenever the daily SST exceeded the 90th percentile of the corresponding climatological distribution. Additionally, consecutive events separated by fewer than two days were merged and treated as a single continuous heatwave event.
+
+Results are presented as annual maps of key heatwave metrics: the total number of days classified as heatwave, the number of distinct heatwave events, and the cumulative intensity of these events, defined as the sum of daily SST exceedances above the climatological 90th percentile threshold.
+
+```{r map of the med building}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+
+region_col <- c("Adriatic Sea" = "#564062",
+                "Ionian Sea and the Central Mediterranean Sea" = "#C79E4E",
+                "Western Mediterranean Sea" = "#923535",
+                "Aegean-Levantine Sea" = "#147113")
+
+# Load your shapefile (replace with your path)
+med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black"))
+
+# Get world land polygons
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+# Plot
+plot_medsea <- ggplot() +
+  # Plot land as grey
+  geom_sf(data = world, fill = "grey80", color = NA) +
+  # Plot Mediterranean regions, each with a different color
+  geom_sf(data = med_regions, aes(fill = name), color = "black", alpha = 0.8) +
+  # Customize colors
+  scale_fill_manual(name = "",values = region_col) +
+  # Coordinate limits to focus on Mediterranean
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+  # Customize theme
+  theme_minimal(base_size = 18) +
+  theme(
+    panel.grid = element_line(color = "gray90"),
+    panel.background = element_rect(fill = "aliceblue"),
+    plot.background = element_rect(fill = "white",color = NA),
+    legend.text = element_text(size = 13),
+    legend.position = "top"
+  )
+
+ggsave("Manuscript/Figs/Map_MedSea.png", plot_medsea, dpi = 300, height =645*3, width = 1319*3, units = "px")
+```
+
+```{r map of the med}
+#| cache: false
+#| echo: false
+#| warning: false
+#| fig-cap: "Region of Mediterranean Sea as definied by Marine Strategy Framework Directive."
+#| label: fig-MapMedSea
+#| out-width: "100%"
+
+knitr::include_graphics("Figs/Map_MedSea.png")
+```
+
+HW metrics where summerised for each regions of the Mediterranean sea, following the nomenclature defined by the Marine Strategy Framework Directive (MSFD, @fig-MapMedSea). 
+
+# Results
+## Number of Event per year
+
+```{r n_envent plots building1}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(terra)
+library(viridisLite)
+library(ggspatial)
+library(Utilities.Package)
+
+
+region_col <- c("Adriatic Sea" = "#564062",
+                "Ionian Sea and the Central Mediterranean Sea" = "#C79E4E",
+                "Western Mediterranean Sea" = "#923535",
+                "Aegean-Levantine Sea" = "#147113")
+# Load your shapefile (replace with your path)
+med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black"))
+
+# Get world land polygons
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+
+filelist <- "Outputs/SST/nc/n_event_per_year" %>% 
+  list.files(full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = value) %>% 
+  mutate(file = gsub(".*/","",path),
+         year = substr(file,9,12))
+
+
+stk <- filelist$path %>% 
+  rast()
+names(stk) <- filelist$year
+
+stk_avg <- mean(stk)
+
+map_n_event <- ggplot() +
+  ## ── data layers ─────────────────────────────────────────────
+  tidyterra::geom_spatraster(data = stk_avg,
+                             aes(fill = mean)) + 
+  geom_sf(data = world, fill = "grey80", color = NA) +
+  ## ── colour scales ───────────────────────────────────────────
+  scale_fill_gradientn(
+    colours  = turbo(10),
+    na.value = "transparent",
+    name     = "Avg number of Event per Year"
+  ) +
+    ## ── horizontal guide with title on top ──────────────────────
+  guides(
+    fill = guide_colourbar(
+      direction      = "horizontal",
+      title.position = "top",
+      label.position = "bottom",            # optional – labels below bar
+      barwidth       = unit(5, "cm"),       # tweak length
+      barheight      = unit(0.45, "cm")     # tweak thickness
+    )
+  ) +
+  ## ── map extent ──────────────────────────────────────────────
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+  ## ── *** scale bar *** ───────────────────────────────────────
+  annotation_scale(
+    location   = "bl",   # bottom-left
+    width_hint = 0.25,   # ≈25 % of the map width
+    line_width = 0.6,
+    text_cex   = 2,
+    pad_x      = unit(0.4, "cm"),
+    pad_y      = unit(0.4, "cm")
+  ) +
+  ## ── theme ───────────────────────────────────────────────────
+  theme_minimal(base_size = 18) +
+  theme(
+    panel.grid        = element_line(color = "gray90"),
+    panel.background  = element_rect(fill = "aliceblue"),
+    plot.background   = element_rect(fill = "white", color = NA),
+
+    # move legend INSIDE, upper-left; anchor by its top-left corner
+    legend.position       = c(0.02, 0.98),   # npc coords (x = 2 %, y = 98 %)
+    legend.justification  = c(0, 1),
+    legend.direction      = "horizontal",
+
+    legend.title.align    = 0.5,             # centre title
+    legend.text           = element_text(size = 13),
+
+    # give legend a white background & a bit of padding
+    legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA,linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4)
+  )
+
+ggsave("Manuscript/Figs/Map_MedSea_n_event.png", map_n_event, dpi = 300, height =575*3, width = 1319*3, units = "px")
+
+############ Line plot by region
+med_regions <- st_transform(med_regions, crs(stk))
+
+zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
+
+# Function that terra::zonal will apply: returns a 3-element vector
+qfun <- function(values, ...) {
+  mean(values, na.rm = TRUE)
+}
+
+# zonal() summarises **all layers at once**
+z_raw <- terra::zonal(stk, zone_rast, fun = qfun)
+
+z_df <- as.data.frame(z_raw)  %>% 
+  mutate(region = med_regions$name) %>% 
+  dplyr::select(-layer) %>% # attach names
+  pivot_longer(c(-region),
+               names_to   = "year",
+               values_to = "mean") %>% 
+  mutate(year = as.numeric(year))
+
+
+plot_lines <- ggplot(z_df, aes(x = year, y = mean, colour = region)) +
+  geom_point(alpha = 0.2) +
+  geom_line(alpha = 0.2) +
+  scale_colour_manual(values = region_col) +
+
+  geom_smooth(
+    method    = "gam",
+    linewidth = 1.2,
+    alpha     = 0.15
+  ) +
+
+  ## ── 1. force a ONE-column legend ────────────────────────────
+  guides(
+    colour = guide_legend(ncol = 1)   # 1 column, items stacked
+  ) +
+
+  labs(colour = "Regions", x = "Year", y = "Average number of HW event") +
+
+  ## ── 2. theme tweaks to pin legend inside, top-left ──────────
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.background   = element_rect(fill = "white", colour = NA),
+    legend.text       = element_text(size = 13),
+
+    legend.position       = c(0.02, 0.98),   # (x, y) in npc units
+    legend.justification  = c(0, 1),         # anchor by its top-left corner
+    legend.direction      = "vertical",      # keeps items vertical
+    legend.background     = element_rect(fill = "white", colour = NA, linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4),
+
+    legend.key.width      = unit(2, "cm")    # leave if you want wider keys
+  )
+
+ggsave("Manuscript/Figs/line_n_event.png", plot_lines, dpi = 300, height =575*3, width = 1319*3, units = "px")
+###################### MAP of TREND
+
+df_map_freq_long <- stk %>%
+  as.data.frame(xy = T) %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
+  mutate(value = case_when(is.na(value) ~ 0,
+                           T ~ value)) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(ID) %>%
+  summarise(trend = coef(lm(value ~ year))[2])
+
+df_freq <- stk %>%
+  as.data.frame(xy = T) %>%  
+  mutate(ID = c(1:nrow(.))) %>% 
+  dplyr::select(c(x,y,ID))
+
+
+df_trend <- df_map_freq_long %>% 
+  # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
+  left_join(df_freq, by = "ID") %>% 
+  dplyr::select(-ID) %>% 
+  relocate(x,y,trend)
+
+rast_trend <- stk$`1982`
+values(rast_trend) <- NA
+
+pts <- vect(df_trend, geom = c("x", "y"), crs = crs(rast_trend))
+
+rast_trend <- rasterize(
+  pts,             # what to burn
+  rast_trend,         # target raster geometry
+  field = "trend", # column to transfer
+  fun   = "mean"   # how to handle duplicate points (mean, max, sum, …)
+)
+
+# Function that terra::zonal will apply: returns a 3-element vector
+qfun <- function(values, ...) {
+  mean(values, na.rm = TRUE)
+}
+
+
+# zonal() summarises **all layers at once**
+z_raw_trend <- terra::zonal(rast_trend, zone_rast, fun = qfun)
+
+z_df_trend <- as.data.frame(z_raw_trend)  %>% 
+  mutate(region = med_regions$name) %>% 
+  dplyr::select(-layer) %>%
+  mutate(mean = round(mean,3),
+         x = case_when(str_detect(region, "Adriatic") ~ 19,
+                       str_detect(region, "Ionian") ~ 11,
+                       str_detect(region, "Western") ~ -2,
+                       str_detect(region, "Aegean") ~ 30),
+         y = case_when(str_detect(region, "Adriatic") ~ 43.5,
+                       str_detect(region, "Ionian") ~ 32,
+                       str_detect(region, "Western") ~ 40,
+                       str_detect(region, "Aegean") ~ 38.5))
+
+
+map_trend <- df_map_freq_long %>% 
+  left_join(df_freq, by = "ID") %>% 
+  ggplot() +
+    ## ── data layers ───────────────────────────────────────────
+    geom_tile(aes(x = x, y = y, fill = trend)) +
+    geom_sf(data = world, fill = "grey80", colour = NA) +
+
+    ## ── colour scale ──────────────────────────────────────────
+    tidyterra::scale_fill_grass_c(
+      name = "Trends of HW frequency (Event per year)",
+      use_grass_range = FALSE
+    ) +
+
+    ## ── 1. horizontal colour bar, title on top ───────────────
+    guides(
+      fill = guide_colourbar(
+        direction      = "horizontal",
+        title.position = "top",
+        label.position = "bottom",            # labels under the bar (optional)
+        barwidth       = unit(10, "cm"),       # adjust length
+        barheight      = unit(0.45, "cm")     # adjust thickness
+      )
+    ) +
+
+    ## ── map extent ───────────────────────────────────────────
+    coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+
+    ## ── region means & colours ───────────────────────────────
+    geom_text(data = z_df_trend,
+              aes(x = x, y = y, label = mean, colour = region),
+              show.legend = FALSE, size = 10) +
+    scale_colour_manual(values = region_col, name = "") +
+
+    ## ── scale bar ────────────────────────────────────────────
+    annotation_scale(
+      location   = "bl",
+      width_hint = 0.25,
+      line_width = 0.6,
+      text_cex   = 2,
+      pad_x      = unit(0.4, "cm"),
+      pad_y      = unit(0.4, "cm")
+    ) +
+
+    ## ── theme ────────────────────────────────────────────────
+    theme_minimal(base_size = 18) +
+    theme(
+      panel.grid        = element_line(colour = "gray90"),
+      panel.background  = element_rect(fill = "aliceblue"),
+      plot.background   = element_rect(fill = "white", colour = NA),
+
+      # 2. park legend INSIDE, top-left
+      legend.position       = c(0.02, 0.98),  # npc coords: 2 % from left, 98 % up
+      legend.justification  = c(0, 1),        # anchor by its top-left corner
+      legend.direction      = "horizontal",
+
+      legend.text           = element_text(size = 13),
+      legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
+      legend.margin         = margin(4, 4, 4, 4),
+
+      axis.title            = element_blank()
+    )
+
+ggsave("Manuscript/Figs/trend_frequency.png", map_trend, dpi = 300, height =575*3, width = 1319*3, units = "px")
+
+
+### BOXPLOT
+
+# ── libraries ───────────────────────────────────────────────────────────
+library(terra)   # raster/terra objects
+library(sf)      # modern vector data
+library(ggplot2) # plotting
+library(dplyr)   # pipe-friendly helpers (optional)
+
+# ── 1. load data ────────────────────────────────────────────────────────
+r   <- rast_trend         # single- or multi-band
+reg <- med_regions           # polygons
+
+# Make sure both layers share the same CRS
+reg <- st_transform(reg, crs(r))
+
+# ── 2. extract values per polygon ───────────────────────────────────────
+# terra::extract() returns a data.frame: one row per cell per polygon
+#   ID   = polygon index (generated automatically)
+#   lyr1 = raster value (one column per raster layer)
+#
+vals <- terra::extract(r, vect(reg))            # vect() converts sf → SpatVector
+
+# ── 3. tidy up: attach region names / attributes ───────────────────────
+# Suppose your regions layer has a column called "NAME"
+ID_name <- reg %>% 
+      as_tibble() %>%  
+      dplyr::mutate(ID = c(1:4))  %>%       # ensure matching ID
+      dplyr::select(ID, name)
+
+vals <- vals %>% 
+  dplyr::left_join(ID_name,by = "ID") %>% 
+  dplyr::filter(mean != 0)
+
+# ── 4. plot ─────────────────────────────────────────────────────────────
+plot_boxplot <- ggplot() +
+  # 1. data layer (legend suppressed)
+  geom_boxplot(
+    data          = vals,
+    aes(x = name, y = mean, fill = name),
+    colour        = "black",
+    linewidth     = .4,
+    alpha         = .60,
+    outlier.shape = 21,
+    outlier.fill  = NA,
+    show.legend   = FALSE
+  ) +
+
+  # 2. dummy layer that only feeds the legend (square keys)
+  geom_point(
+    data = tibble(name = names(region_col), x = NA_real_, y = NA_real_),
+    aes(x, y, fill = name),
+    shape        = 22,        # solid square
+    size         = 6,
+    stroke       = 0,
+    show.legend  = TRUE,
+    inherit.aes  = FALSE
+  )+
+
+  ## ---- scales -----------------------------------------------------------
+  scale_fill_manual(values = region_col, name = "Region") +
+  scale_colour_manual(values = region_col, guide = "none") +
+
+  guides(fill = guide_legend(
+    ncol       = 1,                 # 1 column ⇒ 4 rows
+    byrow      = TRUE,
+    keywidth   = unit(0.6, "cm"),   # square keys
+    keyheight  = unit(0.6, "cm")
+  )) +
+  ## ---- labels & theme ---------------------------------------------------
+  labs(
+    x = NULL,
+    y = "Trends of HW frequency (Event per year)"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.background   = element_rect(fill = "white", colour = NA),
+    legend.text       = element_text(size = 13),
+
+    legend.position       = c(0.02, 0.25),   # (x, y) in npc units
+    legend.justification  = c(0, 1),         # anchor by its top-left corner
+    legend.direction      = "vertical",      # keeps items vertical
+    legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4),
+
+    legend.key.width      = unit(2, "cm"),    # leave if you want wider keys
+    axis.text.x = element_blank()
+  )
+
+ggsave("Manuscript/Figs/trend_boxplot.png", plot_boxplot, dpi = 300, height =575*3, width = 1319*3, units = "px")
+```
+
+```{r n_envent plots building2}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+
+library(magick)
+
+# Adjust the file names / paths
+img_a <- image_read("Manuscript/Figs/Map_MedSea_n_event.png")
+img_b <- image_read("Manuscript/Figs/line_n_event.png")
+img_c <- image_read("Manuscript/Figs/trend_frequency.png")
+img_d <- image_read("Manuscript/Figs/trend_boxplot.png")
+
+row1  <- image_append(c(img_a, img_b), stack = FALSE)  # side-by-side
+row2  <- image_append(c(img_c, img_d), stack = FALSE)
+
+combo <- image_append(c(row1, row2),   stack = TRUE)   # one above the other
+
+image_write(combo, path = "Manuscript/Figs/plot_n_events.png")
+
+```
+
+
+## Intensity 
+
+```{r intensity plots building1}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(terra)
+library(viridisLite)
+library(ggspatial)
+library(Utilities.Package)
+
+
+region_col <- c("Adriatic Sea" = "#564062",
+                "Ionian Sea and the Central Mediterranean Sea" = "#C79E4E",
+                "Western Mediterranean Sea" = "#923535",
+                "Aegean-Levantine Sea" = "#147113")
+# Load your shapefile (replace with your path)
+med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black"))
+
+# Get world land polygons
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+
+filelist <- "Outputs/SST/nc/intensity_mean" %>% 
+  list.files(full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = value) %>% 
+  mutate(file = gsub(".*/","",path),
+         year = substr(file,16,19))
+
+
+stk <- filelist$path %>% 
+  rast()
+names(stk) <- filelist$year
+
+stk_avg <- mean(stk, na.rm = T)
+
+map_intensity <- ggplot() +
+  ## ── data layers ─────────────────────────────────────────────
+  tidyterra::geom_spatraster(data = stk_avg,
+                             aes(fill = mean)) + 
+  geom_sf(data = world, fill = "grey80", color = NA) +
+  ## ── colour scales ───────────────────────────────────────────
+  scale_fill_gradientn(
+    colours  = turbo(10),
+    na.value = "transparent",
+    name     = "Mean Intensity of Events"
+  ) +
+    ## ── horizontal guide with title on top ──────────────────────
+  guides(
+    fill = guide_colourbar(
+      direction      = "horizontal",
+      title.position = "top",
+      label.position = "bottom",            # optional – labels below bar
+      barwidth       = unit(5, "cm"),       # tweak length
+      barheight      = unit(0.45, "cm")     # tweak thickness
+    )
+  ) +
+  ## ── map extent ──────────────────────────────────────────────
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+  ## ── *** scale bar *** ───────────────────────────────────────
+  annotation_scale(
+    location   = "bl",   # bottom-left
+    width_hint = 0.25,   # ≈25 % of the map width
+    line_width = 0.6,
+    text_cex   = 2,
+    pad_x      = unit(0.4, "cm"),
+    pad_y      = unit(0.4, "cm")
+  ) +
+  ## ── theme ───────────────────────────────────────────────────
+  theme_minimal(base_size = 18) +
+  theme(
+    panel.grid        = element_line(color = "gray90"),
+    panel.background  = element_rect(fill = "aliceblue"),
+    plot.background   = element_rect(fill = "white", color = NA),
+
+    # move legend INSIDE, upper-left; anchor by its top-left corner
+    legend.position       = c(0.02, 0.98),   # npc coords (x = 2 %, y = 98 %)
+    legend.justification  = c(0, 1),
+    legend.direction      = "horizontal",
+
+    legend.title.align    = 0.5,             # centre title
+    legend.text           = element_text(size = 13),
+
+    # give legend a white background & a bit of padding
+    legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA,linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4)
+  )
+
+ggsave("Manuscript/Figs/Map_MedSea_intensity.png", map_intensity, dpi = 300, height =575*3, width = 1319*3, units = "px")
+
+############ Line plot by region
+med_regions <- st_transform(med_regions, crs(stk))
+
+zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
+
+# Function that terra::zonal will apply: returns a 3-element vector
+qfun <- function(values, ...) {
+  mean(values, na.rm = TRUE)
+}
+
+# zonal() summarises **all layers at once**
+z_raw <- terra::zonal(stk, zone_rast, fun = qfun)
+
+z_df <- as.data.frame(z_raw)  %>% 
+  mutate(region = med_regions$name) %>% 
+  dplyr::select(-layer) %>% # attach names
+  pivot_longer(c(-region),
+               names_to   = "year",
+               values_to = "mean") %>% 
+  mutate(year = as.numeric(year))
+
+
+plot_lines <- ggplot(z_df, aes(x = year, y = mean, colour = region)) +
+  geom_point(alpha = 0.2) +
+  geom_line(alpha = 0.2) +
+  scale_colour_manual(values = region_col) +
+
+  geom_smooth(
+    method    = "gam",
+    linewidth = 1.2,
+    alpha     = 0.15
+  ) +
+
+  ## ── 1. force a ONE-column legend ────────────────────────────
+  guides(
+    colour = guide_legend(ncol = 1)   # 1 column, items stacked
+  ) +
+
+  labs(colour = "Regions", x = "Year", y = "Average number of HW event") +
+
+  ## ── 2. theme tweaks to pin legend inside, top-left ──────────
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.background   = element_rect(fill = "white", colour = NA),
+    legend.text       = element_text(size = 13),
+
+    legend.position       = c(0.02, 0.98),   # (x, y) in npc units
+    legend.justification  = c(0, 1),         # anchor by its top-left corner
+    legend.direction      = "vertical",      # keeps items vertical
+    legend.background     = element_rect(fill = "white", colour = NA, linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4),
+
+    legend.key.width      = unit(2, "cm")    # leave if you want wider keys
+  )
+
+ggsave("Manuscript/Figs/line_n_event.png", plot_lines, dpi = 300, height =575*3, width = 1319*3, units = "px")
+###################### MAP of TREND
+
+df_map_freq_long <- stk %>%
+  as.data.frame(xy = T) %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
+  mutate(value = case_when(is.na(value) ~ 0,
+                           T ~ value)) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(ID) %>%
+  summarise(trend = coef(lm(value ~ year))[2])
+
+df_freq <- stk %>%
+  as.data.frame(xy = T) %>%  
+  mutate(ID = c(1:nrow(.))) %>% 
+  dplyr::select(c(x,y,ID))
+
+
+df_trend <- df_map_freq_long %>% 
+  # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
+  left_join(df_freq, by = "ID") %>% 
+  dplyr::select(-ID) %>% 
+  relocate(x,y,trend)
+
+rast_trend <- stk$`1982`
+values(rast_trend) <- NA
+
+pts <- vect(df_trend, geom = c("x", "y"), crs = crs(rast_trend))
+
+rast_trend <- rasterize(
+  pts,             # what to burn
+  rast_trend,         # target raster geometry
+  field = "trend", # column to transfer
+  fun   = "mean"   # how to handle duplicate points (mean, max, sum, …)
+)
+
+# Function that terra::zonal will apply: returns a 3-element vector
+qfun <- function(values, ...) {
+  mean(values, na.rm = TRUE)
+}
+
+
+# zonal() summarises **all layers at once**
+z_raw_trend <- terra::zonal(rast_trend, zone_rast, fun = qfun)
+
+z_df_trend <- as.data.frame(z_raw_trend)  %>% 
+  mutate(region = med_regions$name) %>% 
+  dplyr::select(-layer) %>%
+  mutate(mean = round(mean,3),
+         x = case_when(str_detect(region, "Adriatic") ~ 19,
+                       str_detect(region, "Ionian") ~ 11,
+                       str_detect(region, "Western") ~ -2,
+                       str_detect(region, "Aegean") ~ 30),
+         y = case_when(str_detect(region, "Adriatic") ~ 43.5,
+                       str_detect(region, "Ionian") ~ 32,
+                       str_detect(region, "Western") ~ 40,
+                       str_detect(region, "Aegean") ~ 38.5))
+
+
+map_trend <- df_map_freq_long %>% 
+  left_join(df_freq, by = "ID") %>% 
+  ggplot() +
+    ## ── data layers ───────────────────────────────────────────
+    geom_tile(aes(x = x, y = y, fill = trend)) +
+    geom_sf(data = world, fill = "grey80", colour = NA) +
+
+    ## ── colour scale ──────────────────────────────────────────
+    tidyterra::scale_fill_grass_c(
+      name = "Trends of HW frequency (Event per year)",
+      use_grass_range = FALSE
+    ) +
+
+    ## ── 1. horizontal colour bar, title on top ───────────────
+    guides(
+      fill = guide_colourbar(
+        direction      = "horizontal",
+        title.position = "top",
+        label.position = "bottom",            # labels under the bar (optional)
+        barwidth       = unit(10, "cm"),       # adjust length
+        barheight      = unit(0.45, "cm")     # adjust thickness
+      )
+    ) +
+
+    ## ── map extent ───────────────────────────────────────────
+    coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+
+    ## ── region means & colours ───────────────────────────────
+    geom_text(data = z_df_trend,
+              aes(x = x, y = y, label = mean, colour = region),
+              show.legend = FALSE, size = 10) +
+    scale_colour_manual(values = region_col, name = "") +
+
+    ## ── scale bar ────────────────────────────────────────────
+    annotation_scale(
+      location   = "bl",
+      width_hint = 0.25,
+      line_width = 0.6,
+      text_cex   = 2,
+      pad_x      = unit(0.4, "cm"),
+      pad_y      = unit(0.4, "cm")
+    ) +
+
+    ## ── theme ────────────────────────────────────────────────
+    theme_minimal(base_size = 18) +
+    theme(
+      panel.grid        = element_line(colour = "gray90"),
+      panel.background  = element_rect(fill = "aliceblue"),
+      plot.background   = element_rect(fill = "white", colour = NA),
+
+      # 2. park legend INSIDE, top-left
+      legend.position       = c(0.02, 0.98),  # npc coords: 2 % from left, 98 % up
+      legend.justification  = c(0, 1),        # anchor by its top-left corner
+      legend.direction      = "horizontal",
+
+      legend.text           = element_text(size = 13),
+      legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
+      legend.margin         = margin(4, 4, 4, 4),
+
+      axis.title            = element_blank()
+    )
+
+ggsave("Manuscript/Figs/trend_frequency.png", map_trend, dpi = 300, height =575*3, width = 1319*3, units = "px")
+
+
+### BOXPLOT
+
+# ── libraries ───────────────────────────────────────────────────────────
+library(terra)   # raster/terra objects
+library(sf)      # modern vector data
+library(ggplot2) # plotting
+library(dplyr)   # pipe-friendly helpers (optional)
+
+# ── 1. load data ────────────────────────────────────────────────────────
+r   <- rast_trend         # single- or multi-band
+reg <- med_regions           # polygons
+
+# Make sure both layers share the same CRS
+reg <- st_transform(reg, crs(r))
+
+# ── 2. extract values per polygon ───────────────────────────────────────
+# terra::extract() returns a data.frame: one row per cell per polygon
+#   ID   = polygon index (generated automatically)
+#   lyr1 = raster value (one column per raster layer)
+#
+vals <- terra::extract(r, vect(reg))            # vect() converts sf → SpatVector
+
+# ── 3. tidy up: attach region names / attributes ───────────────────────
+# Suppose your regions layer has a column called "NAME"
+ID_name <- reg %>% 
+      as_tibble() %>%  
+      dplyr::mutate(ID = c(1:4))  %>%       # ensure matching ID
+      dplyr::select(ID, name)
+
+vals <- vals %>% 
+  dplyr::left_join(ID_name,by = "ID") %>% 
+  dplyr::filter(mean != 0)
+
+# ── 4. plot ─────────────────────────────────────────────────────────────
+plot_boxplot <- ggplot() +
+  # 1. data layer (legend suppressed)
+  geom_boxplot(
+    data          = vals,
+    aes(x = name, y = mean, fill = name),
+    colour        = "black",
+    linewidth     = .4,
+    alpha         = .60,
+    outlier.shape = 21,
+    outlier.fill  = NA,
+    show.legend   = FALSE
+  ) +
+
+  # 2. dummy layer that only feeds the legend (square keys)
+  geom_point(
+    data = tibble(name = names(region_col), x = NA_real_, y = NA_real_),
+    aes(x, y, fill = name),
+    shape        = 22,        # solid square
+    size         = 6,
+    stroke       = 0,
+    show.legend  = TRUE,
+    inherit.aes  = FALSE
+  )+
+
+  ## ---- scales -----------------------------------------------------------
+  scale_fill_manual(values = region_col, name = "Region") +
+  scale_colour_manual(values = region_col, guide = "none") +
+
+  guides(fill = guide_legend(
+    ncol       = 1,                 # 1 column ⇒ 4 rows
+    byrow      = TRUE,
+    keywidth   = unit(0.6, "cm"),   # square keys
+    keyheight  = unit(0.6, "cm")
+  )) +
+  ## ---- labels & theme ---------------------------------------------------
+  labs(
+    x = NULL,
+    y = "Trends of HW frequency (Event per year)"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.background   = element_rect(fill = "white", colour = NA),
+    legend.text       = element_text(size = 13),
+
+    legend.position       = c(0.02, 0.25),   # (x, y) in npc units
+    legend.justification  = c(0, 1),         # anchor by its top-left corner
+    legend.direction      = "vertical",      # keeps items vertical
+    legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4),
+
+    legend.key.width      = unit(2, "cm"),    # leave if you want wider keys
+    axis.text.x = element_blank()
+  )
+
+ggsave("Manuscript/Figs/trend_boxplot.png", plot_boxplot, dpi = 300, height =575*3, width = 1319*3, units = "px")
+```
+
+```{r Intensity plots building2}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+
+library(magick)
+
+# Adjust the file names / paths
+img_a <- image_read("Manuscript/Figs/Map_MedSea_n_event.png")
+img_b <- image_read("Manuscript/Figs/line_n_event.png")
+img_c <- image_read("Manuscript/Figs/trend_frequency.png")
+img_d <- image_read("Manuscript/Figs/trend_boxplot.png")
+
+row1  <- image_append(c(img_a, img_b), stack = FALSE)  # side-by-side
+row2  <- image_append(c(img_c, img_d), stack = FALSE)
+
+combo <- image_append(c(row1, row2),   stack = TRUE)   # one above the other
+
+image_write(combo, path = "Manuscript/Figs/plot_n_events.png")
+
+```
+
+
+

@@ -1,0 +1,617 @@
+---
+title: "Heatwaves_by_Bins_of_Coords"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r library}
+library(terra)
+library(tidyverse)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+library(patchwork)
+```
+
+#### Duration mean 
+
+```{r data opening}
+
+filelist <- list.files("Outputs/SST/nc/duration_mean", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = gsub(".*_","",filename) %>% substr(.,1,4) %>% as.numeric())
+
+stk <- rast(filelist$path)
+names(stk) <- filelist$year
+
+stk_df <- stk %>% 
+  as.data.frame(xy = T)
+```
+
+```{r longitude vs duration}
+
+df_summerized_x <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(value = case_when(is.na(value) ~ 0, 
+                           T ~ value),
+    year = as.numeric(year)) %>% 
+  group_by(x, year) %>% 
+  reframe(value = mean(value))
+  
+## 1 ── marginal means -------------------------------------------------
+df_col_mean <- df_summerized_x %>% 
+  mutate(year = as.numeric(year)) %>% # mean per longitude bin
+  group_by(x) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean <- df_summerized_x %>%    
+    mutate(year = as.numeric(year)) %>% # mean per longitude bin
+# mean per year
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_longitude <- ggplot(df_summerized_x, aes(x = x, y = year)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value), show.legend = FALSE) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean,
+    aes(x = x, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean,
+    aes(x = mean_val, y = year)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10)) +
+  scale_colour_gradientn(colours = turbo(10)) +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Longitude bin", y = "Year") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+
+
+
+```
+
+```{r latitude vs duration}
+library(dplyr)
+library(ggplot2)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+
+df_summerized_y <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(value = case_when(is.na(value) ~ 0, 
+                           T ~ value),
+         year = as.numeric(year)) %>% 
+  group_by(y, year) %>% 
+  reframe(value = mean(value))
+
+## 1 ── marginal means -------------------------------------------------
+df_col_mean_lat <- df_summerized_y %>% 
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean_lat <- df_summerized_y %>%
+  group_by(y) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_latitude <- ggplot(df_summerized_y, aes(x = year, y = y)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value)) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean_lat,
+    aes(x = year, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean_lat,
+    aes(x = mean_val, y = y)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10), name = "Days of Heatwave per Year") +
+  scale_colour_gradientn(colours = turbo(10),  name = "Days of Heatwave per Year") +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Year", y = "Latitude bin") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+```
+
+```{r plot all}
+plot_all <- plot_longitude + plot_latitude + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+ggsave("Outputs/SST/plot/Bins/duration_mean.png",plot_all, width = 10, height = 5.05)
+
+```
+
+
+#### Frequency
+
+```{r data opening}
+
+filelist <- list.files("Outputs/SST/nc/n_event_per_year/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = substr(filename,9,12))
+
+stk <- rast(filelist$path)
+names(stk) <- filelist$year
+
+stk_df <- stk %>% 
+  as.data.frame(xy = T)
+```
+
+```{r longitude vs frequency}
+library(dplyr)
+library(ggplot2)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+
+df_summerized_x <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(x, year) %>% 
+  reframe(value = mean(value))
+  
+## 1 ── marginal means -------------------------------------------------
+df_col_mean <- df_summerized_x %>% 
+  mutate(year = as.numeric(year)) %>% # mean per longitude bin
+  group_by(x) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean <- df_summerized_x %>%    
+    mutate(year = as.numeric(year)) %>% # mean per longitude bin
+# mean per year
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_longitude <- ggplot(df_summerized_x, aes(x = x, y = year)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value), show.legend = FALSE) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean,
+    aes(x = x, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean,
+    aes(x = mean_val, y = year)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10)) +
+  scale_colour_gradientn(colours = turbo(10)) +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Longitude bin", y = "Year") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+
+
+
+```
+
+```{r latitude vs frequency}
+library(dplyr)
+library(ggplot2)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+
+df_summerized_y <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(y, year) %>% 
+  reframe(value = mean(value))
+
+## 1 ── marginal means -------------------------------------------------
+df_col_mean_lat <- df_summerized_y %>% 
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean_lat <- df_summerized_y %>%
+  group_by(y) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_latitude <- ggplot(df_summerized_y, aes(x = year, y = y)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value)) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean_lat,
+    aes(x = year, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean_lat,
+    aes(x = mean_val, y = y)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10), name = "Number of Event per Year") +
+  scale_colour_gradientn(colours = turbo(10), name = "Number of Event per Year") +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Year", y = "Latitude bin") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+```
+
+```{r plot all}
+plot_all <- plot_longitude + plot_latitude + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+ggsave("Outputs/SST/plot/Bins/n_event_per_year.png",plot_all, width = 10, height = 5.05)
+```
+
+```{r map of the med}
+
+library(Utilities.Package)
+
+df_map <- stk_df %>% 
+  pivot_longer(-c(x, y), names_to = "year", values_to = "value") %>% 
+  group_by(x,y) %>% 
+  reframe(value = mean(value, na.rm = T))
+
+ggplot(df_map,aes(x = x, y = y, fill = value, color =value))+
+  geom_tile()+
+  scale_fill_gradientn(colours = turbo(10), name = "Avg number of Event per Year") +
+  scale_colour_gradientn(colours = turbo(10), name = "Avg number of Event per Year") +
+  theme_Bede_Map()
+
+
+
+```
+
+
+#### Intensity
+
+```{r data opening}
+
+filelist <- list.files("Outputs/SST/nc/intensity_mean/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = substr(filename,16,19))
+
+stk <- rast(filelist$path)
+names(stk) <- filelist$year
+
+stk_df <- stk %>% 
+  as.data.frame(xy = T)
+```
+
+```{r longitude vs intensity_mean}
+library(dplyr)
+library(ggplot2)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+
+df_summerized_x <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(value = case_when(is.na(value) ~ 0, 
+                           T ~ value),
+    year = as.numeric(year)) %>% 
+  group_by(x, year) %>% 
+  reframe(value = mean(value))
+  
+## 1 ── marginal means -------------------------------------------------
+df_col_mean <- df_summerized_x %>% 
+  mutate(year = as.numeric(year)) %>% # mean per longitude bin
+  group_by(x) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean <- df_summerized_x %>%    
+    mutate(year = as.numeric(year)) %>% # mean per longitude bin
+# mean per year
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_longitude <- ggplot(df_summerized_x, aes(x = x, y = year)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value), show.legend = FALSE) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean,
+    aes(x = x, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean,
+    aes(x = mean_val, y = year)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10)) +
+  scale_colour_gradientn(colours = turbo(10)) +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Longitude bin", y = "Year") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+
+
+
+```
+
+```{r latitude vs intensity_mean}
+library(dplyr)
+library(ggplot2)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+
+df_summerized_y <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(value = case_when(is.na(value) ~ 0, 
+                           T ~ value),
+    year = as.numeric(year)) %>% 
+  group_by(y, year) %>% 
+  reframe(value = mean(value))
+
+## 1 ── marginal means -------------------------------------------------
+df_col_mean_lat <- df_summerized_y %>% 
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean_lat <- df_summerized_y %>%
+  group_by(y) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_latitude <- ggplot(df_summerized_y, aes(x = year, y = y)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value)) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean_lat,
+    aes(x = year, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean_lat,
+    aes(x = mean_val, y = y)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10), name = "Mean intensity of events (°C)") +
+  scale_colour_gradientn(colours = turbo(10), name = "Mean intensity of events (°C)") +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Year", y = "Latitude bin") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+```
+
+```{r plot all}
+plot_all <- plot_longitude + plot_latitude + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+ggsave("Outputs/SST/plot/Bins/intensity_mean.png",plot_all, width = 10, height = 5.05)
+```
+
+#### rate_onset
+
+```{r data opening}
+
+filelist <- list.files("Outputs/SST/nc/rate_onset/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = substr(filename,12,15))
+
+stk <- rast(filelist$path)
+names(stk) <- filelist$year
+
+stk_df <- stk %>% 
+  as.data.frame(xy = T)
+```
+
+```{r longitude vs rate_onset}
+library(dplyr)
+library(ggplot2)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+
+df_summerized_x <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(value = case_when(is.na(value) ~ 0, 
+                           T ~ value),
+    year = as.numeric(year)) %>% 
+  group_by(x, year) %>% 
+  reframe(value = mean(value))
+  
+## 1 ── marginal means -------------------------------------------------
+df_col_mean <- df_summerized_x %>% 
+  mutate(year = as.numeric(year)) %>% # mean per longitude bin
+  group_by(x) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean <- df_summerized_x %>%    
+    mutate(year = as.numeric(year)) %>% # mean per longitude bin
+# mean per year
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_longitude <- ggplot(df_summerized_x, aes(x = x, y = year)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value), show.legend = FALSE) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean,
+    aes(x = x, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean,
+    aes(x = mean_val, y = year)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10)) +
+  scale_colour_gradientn(colours = turbo(10)) +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Longitude bin", y = "Year") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+
+
+
+```
+
+```{r latitude vs rate_onset}
+library(dplyr)
+library(ggplot2)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+
+df_summerized_y <- stk_df %>% 
+  pivot_longer(-c(x,y), names_to = "year", values_to = "value") %>% 
+  mutate(value = case_when(is.na(value) ~ 0, 
+                           T ~ value),
+    year = as.numeric(year)) %>% 
+  group_by(y, year) %>% 
+  reframe(value = mean(value))
+
+## 1 ── marginal means -------------------------------------------------
+df_col_mean_lat <- df_summerized_y %>% 
+  group_by(year) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+df_row_mean_lat <- df_summerized_y %>%
+  group_by(y) %>%
+  summarise(mean_val = mean(value, na.rm = TRUE), .groups = "drop")
+
+## 2 ── main plot + side panels ---------------------------------------
+plot_latitude <- ggplot(df_summerized_y, aes(x = year, y = y)) +
+
+  ## heat-map in the centre
+  geom_tile(aes(fill = value, colour = value)) +
+
+  ## column-wise mean (TOP)
+  geom_xsideline(
+    data = df_col_mean_lat,
+    aes(x = year, y = mean_val)
+  ) +
+
+  ## row-wise mean (RIGHT)
+  geom_ysideline(
+    data = df_row_mean_lat,
+    aes(x = mean_val, y = y)
+  ) +
+
+  ## colour scales for the heat-map
+  scale_fill_gradientn(colours = turbo(10), name = "Rate of onset (°C.day-1)") +
+  scale_colour_gradientn(colours = turbo(10), name = "Mean intensity of events (°C.day-1)") +
+
+  ## keep the tile grid tight
+  coord_cartesian(expand = FALSE) +
+
+  ## a little styling
+  theme_bw() +
+  labs(x = "Year", y = "Latitude bin") +
+
+  ## make the side panels narrow and flush
+  theme(
+    ggside.panel.scale   = 0.15,     # width/height of side panels
+    ggside.panel.spacing = unit(0, "pt")         # zero gap between panels
+  )
+```
+
+```{r plot all}
+plot_all <- plot_longitude + plot_latitude + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+ggsave("Outputs/SST/plot/Bins/rate_onset.png",plot_all, width = 10, height = 5.05)
+```
+

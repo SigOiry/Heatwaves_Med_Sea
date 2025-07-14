@@ -1,0 +1,260 @@
+---
+title: "Heatwaves_by_Bins_of_Coords"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r library}
+library(terra)
+library(tidyverse)
+library(ggside)          # side-panel geoms
+library(viridisLite)
+library(patchwork)
+```
+
+#### Frequency
+
+```{r data opening}
+
+filelist_freq <- list.files("Outputs/SST/nc/n_event_per_year/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = substr(filename,9,12))
+
+stk_freq <- rast(filelist_freq$path)
+names(stk_freq) <- filelist_freq$year
+
+stk_df_freq <- stk_freq %>% 
+  as.data.frame(xy = T)
+```
+
+```{r map of the med}
+
+library(Utilities.Package)
+
+df_map_freq <- stk_df_freq %>% 
+  pivot_longer(-c(x, y), names_to = "year", values_to = "value") %>% 
+  group_by(x,y) %>% 
+  reframe(value = mean(value, na.rm = T))
+
+ggplot(df_map_freq,aes(x = x, y = y, fill = value, color =value))+
+  geom_tile()+
+  scale_fill_gradientn(colours = turbo(10), name = "Avg number of Event per Year") +
+  scale_colour_gradientn(colours = turbo(10), name = "Avg number of Event per Year") +
+  theme_Bede_Map()
+```
+
+```{r trends of frequency}
+
+library(Utilities.Package)
+
+df_map_freq_long <- stk_df_freq %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
+  mutate(value = case_when(is.na(value) ~ 0,
+                           T ~ value)) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(ID) %>%
+  summarise(trend = coef(lm(value ~ year))[2])
+
+df_freq <- stk_df_freq %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  dplyr::select(c(x,y,ID))
+
+df_map_freq_long %>% 
+  # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
+  left_join(df_freq, by = "ID") %>% 
+  ggplot(aes(x = x, y = y, fill = trend, color =trend))+
+    geom_tile()+
+    tidyterra::scale_fill_grass_c("celsius",use_grass_range = FALSE)+
+    tidyterra::scale_color_grass_c("celsius",use_grass_range = FALSE)+
+    theme_Bede_Map()
+```
+
+
+
+#### Intensity mean
+
+```{r data opening intensity}
+
+filelist_Intensity <- list.files("Outputs/SST/nc/intensity_mean", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = substr(filename,16,19))
+
+stk_Intensity <- rast(filelist_Intensity$path)
+names(stk_Intensity) <- filelist_Intensity$year
+
+stk_df_Intensity <- stk_Intensity %>% 
+  as.data.frame(xy = T)
+
+```
+
+```{r map of the med intensity}
+
+library(Utilities.Package)
+
+df_map_Intensity <- stk_df_Intensity %>% 
+  pivot_longer(-c(x, y), names_to = "year", values_to = "value") %>% 
+  group_by(x,y) %>% 
+  reframe(value = mean(value, na.rm = T))
+
+ggplot(df_map_Intensity,aes(x = x, y = y, fill = value, color =value))+
+  geom_tile()+
+  scale_fill_gradientn(colours = turbo(10), name = "Avg intensity of Events") +
+  scale_colour_gradientn(colours = turbo(10), name = "Avg intensity of Events") +
+  theme_Bede_Map()
+```
+
+```{r trends of intensity}
+
+library(Utilities.Package)
+
+df_map_Intensity_long <- stk_df_Intensity %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
+  mutate(value = case_when(is.na(value) ~ 0,
+                           T ~ value)) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(ID) %>%
+  summarise(trend = coef(lm(value ~ year))[2])
+
+df_Intensity <- stk_df_Intensity %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  dplyr::select(c(x,y,ID))
+
+df_map_Intensity_long %>% 
+  # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
+  left_join(df_Intensity, by = "ID") %>% 
+  ggplot(aes(x = x, y = y, fill = trend, color =trend))+
+    geom_tile()+
+    tidyterra::scale_fill_grass_c("celsius",use_grass_range = FALSE, name = "Trend of intensity increase:")+
+    tidyterra::scale_color_grass_c("celsius",use_grass_range = FALSE, name = "Trend of intensity increase:")+
+    theme_Bede_Map()
+```
+
+#### Duration
+
+```{r data opening duration}
+
+filelist_duration <- list.files("Outputs/SST/nc/duration_mean", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = substr(filename,15,18))
+
+stk_duration <- rast(filelist_duration$path)
+names(stk_duration) <- filelist_duration$year
+
+stk_df_duration <- stk_duration %>% 
+  as.data.frame(xy = T)
+
+```
+
+```{r map of the med duration}
+
+library(Utilities.Package)
+
+df_map_duration <- stk_df_duration %>% 
+  pivot_longer(-c(x, y), names_to = "year", values_to = "value") %>% 
+  group_by(x,y) %>% 
+  reframe(value = mean(value, na.rm = T))
+
+ggplot(df_map_duration,aes(x = x, y = y, fill = value, color =value))+
+  geom_tile()+
+  scale_fill_gradientn(colours = turbo(10), name = "Avg duration of Events") +
+  scale_colour_gradientn(colours = turbo(10), name = "Avg duration of Events") +
+  theme_Bede_Map()
+```
+
+```{r trends of duration}
+
+library(Utilities.Package)
+
+df_map_duration_long <- stk_df_duration %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
+  mutate(value = case_when(is.na(value) ~ 0,
+                           T ~ value)) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(ID) %>%
+  summarise(trend = coef(lm(value ~ year))[2])
+
+df_duration <- stk_df_duration %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  dplyr::select(c(x,y,ID))
+
+df_map_duration_long %>% 
+  # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
+  left_join(df_duration, by = "ID") %>% 
+  ggplot(aes(x = x, y = y, fill = trend, color =trend))+
+    geom_tile()+
+    tidyterra::scale_fill_grass_c("celsius",use_grass_range = FALSE, name = "Trend of duration increase:")+
+    tidyterra::scale_color_grass_c("celsius",use_grass_range = FALSE, name = "Trend of duration increase:")+
+    theme_Bede_Map()
+```
+
+
+#### intensity_cumulative
+
+```{r data opening intensity_cumulative}
+
+filelist_intensity_cumulative_sum <- list.files("Outputs/SST/nc/intensity_cumulative_sum", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         year = substr(filename,26,29))
+
+stk_intensity_cumulative_sum <- rast(filelist_intensity_cumulative_sum$path)
+names(stk_intensity_cumulative_sum) <- filelist_intensity_cumulative_sum$year
+
+stk_df_intensity_cumulative_sum <- stk_intensity_cumulative_sum %>% 
+  as.data.frame(xy = T)
+
+```
+
+```{r map of the med intensity_cumulative}
+
+library(Utilities.Package)
+
+df_map_intensity_cumulative_sum <- stk_df_intensity_cumulative_sum %>% 
+  pivot_longer(-c(x, y), names_to = "year", values_to = "value") %>% 
+  group_by(x,y) %>% 
+  reframe(value = mean(value, na.rm = T))
+
+ggplot(df_map_intensity_cumulative_sum,aes(x = x, y = y, fill = value, color =value))+
+  geom_tile()+
+  scale_fill_gradientn(colours = turbo(10), name = "Avg cumulative intensity") +
+  scale_colour_gradientn(colours = turbo(10), name = "Avg cumulative intensity") +
+  theme_Bede_Map()
+```
+
+```{r trends of intensity_cumulative}
+
+library(Utilities.Package)
+
+df_map_intensity_cumulative_sum_long <- stk_df_intensity_cumulative_sum %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
+  mutate(value = case_when(is.na(value) ~ 0,
+                           T ~ value)) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(ID) %>%
+  summarise(trend = coef(lm(value ~ year))[2])
+
+df_intensity_cumulative_sum <- stk_df_intensity_cumulative_sum %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  dplyr::select(c(x,y,ID))
+
+df_map_intensity_cumulative_sum_long %>% 
+  # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
+  left_join(df_intensity_cumulative_sum, by = "ID") %>% 
+  ggplot(aes(x = x, y = y, fill = trend, color =trend))+
+    geom_tile()+
+    tidyterra::scale_fill_grass_c("celsius",use_grass_range = FALSE, name = "Trend of cumulative intensity:")+
+    tidyterra::scale_color_grass_c("celsius",use_grass_range = FALSE, name = "Trend of cumulative intensity:")+
+    theme_Bede_Map()
+```

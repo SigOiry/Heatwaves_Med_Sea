@@ -1,3 +1,8 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
 ```{r Library}
 library(tidyverse)
 library(terra)
@@ -33,7 +38,7 @@ for(i in 1:nrow(SST_list)){
   
   print(paste0(i, "/",nrow(SST_list)))
   
-  df_i <- (rast(SST_list$path[i])[[1]]-273.15) %>% 
+  df_i <- rast(SST_list$path[i])[[1]]-273.15 %>% 
     crop(mask, mask = T) %>% 
     as.data.frame(xy = T) %>% 
     mutate(date = SST_list$Date[i])
@@ -185,8 +190,6 @@ all_data_wide_with_ID[{
     .rows <- 1
     .rows[between(.rows, -.N, .N)]
 }]
-
-
 ```
 
 ```{r HEATWAVE detection}
