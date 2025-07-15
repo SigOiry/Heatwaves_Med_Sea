@@ -12,6 +12,8 @@ library(trend)
 library(zyp)
 library(mapdata)
 library(future.apply)
+library(data.table)    # fast writer
+
 ```
 
 ```{r filelist}
@@ -20,7 +22,8 @@ SST_list <- list.files("Data/SST", pattern = ".nc", recursive = T, full.names = 
   as_tibble() %>% 
   rename(path = "value") %>% 
   mutate(img_name = gsub(".*/","",path),
-         Date = as.Date(substr(img_name,1,8), format = "%Y%m%d"))
+         Date = as.Date(substr(img_name,1,8), format = "%Y%m%d")) %>% 
+  dplyr::filter(!str_detect(img_name,".aux"))
 ```
 
 ```{r mask}
@@ -33,20 +36,35 @@ mask <- rast("Data/mask_Med_Sea/mask.nc") %>%
 ```
 
 ```{r img_opening}
+library(terra)
+library(data.table)
 
-for(i in 1:nrow(SST_list)){
-  
-  print(paste0(i, "/",nrow(SST_list)))
-  
-  df_i <- rast(SST_list$path[i])[[1]]-273.15 %>% 
-    crop(mask, mask = T) %>% 
-    as.data.frame(xy = T) %>% 
-    mutate(date = SST_list$Date[i])
-  
-  write.csv(df_i, paste0("Outputs/SST/Cropped_CSV/", gsub(".nc",".csv",SST_list$img_name[i])), row.names = F)
+n <- nrow(SST_list)
+pb <- txtProgressBar(min = 0, max = n, style = 3)   # ▮▮▮▯ style = 3 gives a nice ASCII bar
+
+for (i in seq_len(n)) {
+
+  df_i <- (rast(SST_list$path[i])[[1]] - 273.15) %>%
+    terra::crop(mask, mask = TRUE) %>%
+    as.data.frame(xy = TRUE) %>%
+    transform(date = SST_list$Date[i])               # transform is a tiny bit faster than mutate
+
+  fwrite(
+    df_i,
+    file = file.path(
+      "Outputs/SST/Cropped_CSV",
+      sub("\\.nc$", ".csv", SST_list$img_name[i])
+    ),
+    row.names = FALSE
+  )
+
+  setTxtProgressBar(pb, i)                           # update the bar
 }
 
+close(pb) 
+
 ```
+
 
 ```{r HW analysis  NOT WORKING --- TO COMPUTATIONALLY INTENSIVE}
 library(data.table)

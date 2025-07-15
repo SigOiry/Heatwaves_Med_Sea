@@ -1,5 +1,5 @@
 ---
-title: Marine Heatwaves in the Med Sea
+title: Marine Heatwaves in a warming Mediterranean Sea
 subtitle: A temporale analysis
 author:
   - name: Simon Oiry^[Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France]
@@ -15,6 +15,12 @@ author:
       - Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy
   - name: Maria Laura Zoffoli^[Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy]
     orcid: 0000-0003-1892-0051
+    corresponding: false
+    roles: 
+      - Data acquisition
+      - Revision
+  - name: Christian Marchese^[Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy]
+    orcid: 0000-0002-2414-9251
     corresponding: false
     roles: 
       - Data acquisition
@@ -206,7 +212,134 @@ knitr::include_graphics("Figs/Map_MedSea.png")
 HW metrics where summerised for each regions of the Mediterranean sea, following the nomenclature defined by the Marine Strategy Framework Directive (MSFD, @fig-MapMedSea). 
 
 # Results
-## Number of Event per year
+
+## SST phenology
+
+```{r SST phenology}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(data.table)
+library(dtplyr)
+library(tidyverse)
+library(dplyr)
+library(duckdb)
+
+List_HW_csv <- list.files("Outputs/SST/Cropped_CSV/", pattern = ".csv",recursive = T, full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(filename = gsub(".*/","",path),
+         Date = as.Date(substr(filename,1,8), format = "%Y%m%d"), 
+         doy = yday(Date))
+
+
+for (i in 343:max(unique(List_HW_csv$doy))) {
+  
+  print(i)
+  
+  List <- List_HW_csv %>% 
+    dplyr::filter(doy == i)
+  
+  
+  # Create a progress bar
+  pb <- txtProgressBar(min = 0, max = nrow(List), style = 3)
+  
+  # Efficiently read all CSV files and combine them into a single data.table with progress bar
+  all_data <- rbindlist(lapply(seq_along(List$path), function(i) {
+    # Update the progress bar
+    setTxtProgressBar(pb, i)
+    
+    # Read the CSV file
+    fread(List$path[i])
+  }), use.names = TRUE, fill = TRUE)
+  
+  # Close the progress bar
+  close(pb)
+  
+  
+  split1 <- all_data %>% 
+    mutate(year = year(date)) %>% 
+    dplyr::filter(year <= 1991) %>% 
+    mutate(split = "1982-1991")
+  
+  split2 <- all_data %>% 
+    mutate(year = year(date)) %>% 
+    dplyr::filter(year > 1991 & year <= 2001)%>% 
+    mutate(split = "1992-2001")
+  
+  split3 <- all_data %>% 
+    mutate(year = year(date)) %>% 
+    dplyr::filter(year > 2001 & year <= 2011)%>% 
+    mutate(split = "2002-2011")
+  
+  split4 <- all_data %>% 
+    mutate(year = year(date)) %>% 
+    dplyr::filter(year > 2011)%>% 
+    mutate(split = "2012-2024")
+  
+  df_by_split <- all_data %>% 
+    mutate(year = year(date),
+           split = "all") %>% 
+    rbind(split1, split2, split3, split4)
+  
+  # pheno_date <- df_by_split %>% 
+  #   group_by(x,y,split) %>% 
+  #   reframe(mean = mean(analysed_sst, na.rm = T),
+  #           median = median(analysed_sst, na.rm = T),
+  #           sd = sd(analysed_sst, na.rm = T),
+  #           p05 = quantile(analysed_sst, probs = 0.05),
+  #           p25 = quantile(analysed_sst, probs = 0.25),
+  #           p75 = quantile(analysed_sst, probs = 0.75),
+  #           p95 = quantile(analysed_sst, probs = 0.95)
+  # )
+  
+  
+  # Create a temporary DuckDB connection
+con <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+
+# Copy the tibble to DuckDB as a lazy table
+df_lazy <- copy_to(con, df_by_split, temporary = TRUE)
+
+# Now summarise using lazy evaluation
+pheno_date <- df_lazy %>%
+  group_by(x, y, split) %>%
+  summarise(
+    mean   = mean(analysed_sst, na.rm = TRUE),
+    median = median(analysed_sst, na.rm = TRUE),
+    sd     = sd(analysed_sst, na.rm = TRUE),
+    p05    = quantile(analysed_sst, 0.05),
+    p25    = quantile(analysed_sst, 0.25),
+    p75    = quantile(analysed_sst, 0.75),
+    p95    = quantile(analysed_sst, 0.95),
+    .groups = "drop"
+  ) %>%
+  collect() %>% 
+  mutate(doy = i)# Pull results back into R
+  
+rm(con)
+rm(df_lazy)
+
+fwrite(pheno_date, paste0("Outputs/SST/SST_Phenology/doy/", "SST_Pheno_DOY_",i,".csv"))
+}
+```
+
+```{r plotting}
+
+df1 <- read.csv("Outputs/SST/SST_Phenology/doy/SST_Pheno_DOY_100.csv") %>% 
+  dplyr::filter(split == "all")
+
+df1 %>% 
+  ggplot(aes(x = x, y = y, fill = mean))+
+  geom_tile()
+
+```
+
+
+
+## Heatwaves
+### Number of Event per year
 
 ```{r n_envent plots building1}
 #| cache: false
@@ -411,7 +544,7 @@ values(rast_trend) <- NA
 
 pts <- vect(df_trend, geom = c("x", "y"), crs = crs(rast_trend))
 
-rast_trend <- rasterize(
+rast_trend <- terra::rasterize(
   pts,             # what to burn
   rast_trend,         # target raster geometry
   field = "trend", # column to transfer
@@ -427,18 +560,24 @@ qfun <- function(values, ...) {
 # zonal() summarises **all layers at once**
 z_raw_trend <- terra::zonal(rast_trend, zone_rast, fun = qfun)
 
+# 1.  Add centroid geometry and its coordinates to `med_regions`
+med_regions <- med_regions %>%                                 # already an sf multipolygon
+  mutate(centroid = st_centroid(geometry),                     # geometry column is usually called `geometry`
+         lon      = st_coordinates(centroid)[, 1],             # X
+         lat      = st_coordinates(centroid)[, 2])             # Y
+#   └─> use st_point_on_surface(geometry) instead of st_centroid() if you
+#       must ensure the point falls inside every (multi)polygon
+
+# 2.  Keep only what you want to join
+centroids_tbl <- med_regions %>% 
+  st_drop_geometry() %>%                                       # drops *all* sf geometries
+  select(name, lon, lat)  
+
 z_df_trend <- as.data.frame(z_raw_trend)  %>% 
   mutate(region = med_regions$name) %>% 
   dplyr::select(-layer) %>%
-  mutate(mean = round(mean,3),
-         x = case_when(str_detect(region, "Adriatic") ~ 19,
-                       str_detect(region, "Ionian") ~ 11,
-                       str_detect(region, "Western") ~ -2,
-                       str_detect(region, "Aegean") ~ 30),
-         y = case_when(str_detect(region, "Adriatic") ~ 43.5,
-                       str_detect(region, "Ionian") ~ 32,
-                       str_detect(region, "Western") ~ 40,
-                       str_detect(region, "Aegean") ~ 38.5))
+  mutate(mean = round(mean,3)) %>% 
+  left_join(centroids_tbl, by = c("region" = "name"))
 
 
 map_trend <- df_map_freq_long %>% 
@@ -469,9 +608,9 @@ map_trend <- df_map_freq_long %>%
     coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
 
     ## ── region means & colours ───────────────────────────────
-    geom_text(data = z_df_trend,
-              aes(x = x, y = y, label = mean, colour = region),
-              show.legend = FALSE, size = 10) +
+    geom_label(data = z_df_trend,
+              aes(x = lon, y = lat, label = mean, colour = region),
+              show.legend = FALSE, fill = rgb(1,1,1,0.7), size = 5) +
     scale_colour_manual(values = region_col, name = "") +
 
     ## ── scale bar ────────────────────────────────────────────
@@ -503,6 +642,8 @@ map_trend <- df_map_freq_long %>%
       axis.title            = element_blank()
     )
 
+map_trend
+
 ggsave("Manuscript/Figs/trend_frequency.png", map_trend, dpi = 300, height =575*3, width = 1319*3, units = "px")
 
 
@@ -532,12 +673,16 @@ vals <- terra::extract(r, vect(reg))            # vect() converts sf → SpatVec
 # Suppose your regions layer has a column called "NAME"
 ID_name <- reg %>% 
       as_tibble() %>%  
-      dplyr::mutate(ID = c(1:10))  %>%       # ensure matching ID
+      dplyr::mutate(ID = c(1:10),
+                    name = as_factor(name))  %>%       # ensure matching ID
       dplyr::select(ID, name)
 
 vals <- vals %>% 
   dplyr::left_join(ID_name,by = "ID") %>% 
-  dplyr::filter(mean != 0)
+  dplyr::filter(mean != 0)%>%                       # your summary data-frame
+  mutate(
+    name = fct_reorder(name, mean, .desc = TRUE)  # order by mean, descending
+  )
 
 # ── 4. plot ─────────────────────────────────────────────────────────────
 plot_boxplot <- ggplot() +
@@ -610,12 +755,35 @@ ggsave("Manuscript/Figs/trend_boxplot.png", plot_boxplot, dpi = 300, height =575
 
 library(magick)
 
-# Adjust the file names / paths
+# ── 1. read the four individual plots ───────────────────────────────────
 img_a <- image_read("Manuscript/Figs/Map_MedSea_n_event.png")
 img_b <- image_read("Manuscript/Figs/line_n_event.png")
 img_c <- image_read("Manuscript/Figs/trend_frequency.png")
 img_d <- image_read("Manuscript/Figs/trend_boxplot.png")
 
+# ── 2. add a corner label to each plot ──────────────────────────────────
+stamp <- function(img, letter,
+                  size = 80,               # point size of the label
+                  gravity = "northwest",   # top-left corner
+                  offset  = "+20+15") {    # x,y offset from the corner
+  image_annotate(
+    img, letter,
+    font      = "Helvetica-Bold",
+    size      = size,
+    gravity   = gravity,
+    location  = offset,
+    color     = "black",
+    boxcolor  = "white",   # gives a small white rectangle behind the letter
+    weight    = 700        # ensures the stroke is bold
+  )
+}
+
+img_a <- stamp(img_a, "A")
+img_b <- stamp(img_b, "B")
+img_c <- stamp(img_c, "C")
+img_d <- stamp(img_d, "D")
+
+# ── 3. assemble the composite exactly as before ─────────────────────────
 row1  <- image_append(c(img_a, img_b), stack = FALSE)  # side-by-side
 row2  <- image_append(c(img_c, img_d), stack = FALSE)
 
@@ -626,7 +794,7 @@ image_write(combo, path = "Manuscript/Figs/plot_n_events.png")
 ```
 
 
-## Intensity 
+### Intensity 
 
 ```{r intensity plots building1}
 #| cache: false
@@ -646,20 +814,26 @@ library(Utilities.Package)
 
 
 region_col <- c(
-  "Levantine Sea" = "#147113",  # pine green (was used for Aegean-Levantine before)
-  "Alboran Sea"   = "#465074",  # slate blue
-  "Balearic Sea"  = "#9C8547",  # dusty mustard
-  "Algerian Sea"  = "#7A2F2F",  # chestnut
-  "Sea of Sicily" = "#C79E4E",  # warm ochre
-  "Gulf of Lyon"  = "#2E636E",  # muted teal
-  "Adriatic sea"  = "#564062",  # muted indigo
-  "Tyrrhenian Sea"= "#923535",  # deep brick red
-  "Ionian Sea"    = "#6A5847",  # earthy taupe
-  "Aegean Sea"    = "#0F5A12"   # forest green
+  # greens
+  "Levantine Sea" = "#008F1A",   # brighter pine-green
+  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
+  
+  # blues / teals / purples
+  "Alboran Sea"   = "#414E7C",   # richer slate-blue
+  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
+  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
+  
+  # yellows / ochres
+  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
+  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
+  
+  # reds / oranges / browns
+  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
+  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
+  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
 )
-
 # Load your shapefile (replace with your path)
-med_regions <- st_read("Data/mask_Med_Sea/RegionMedSea.shp") %>% 
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
   dplyr::filter(!str_detect(name, "Black"))
 
 # Get world land polygons
@@ -689,7 +863,7 @@ map_intensity <- ggplot() +
   scale_fill_gradientn(
     colours  = turbo(10),
     na.value = "transparent",
-    name     = "Mean Intensity of Events"
+    name     = "Mean intensity of HW events (°C)"
   ) +
     ## ── horizontal guide with title on top ──────────────────────
   guides(
@@ -732,13 +906,17 @@ map_intensity <- ggplot() +
     legend.margin         = margin(4, 4, 4, 4)
   )
 
+map_intensity
+
 ggsave("Manuscript/Figs/Map_MedSea_intensity.png", map_intensity, dpi = 300, height =575*3, width = 1319*3, units = "px")
 
 ############ Line plot by region
 med_regions <- st_transform(med_regions, crs(stk))
 
-zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
+# med_regions <- st_zm(med_regions)
 
+zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
+plot(zone_rast)
 # Function that terra::zonal will apply: returns a 3-element vector
 qfun <- function(values, ...) {
   mean(values, na.rm = TRUE)
@@ -757,22 +935,24 @@ z_df <- as.data.frame(z_raw)  %>%
 
 
 plot_lines <- ggplot(z_df, aes(x = year, y = mean, colour = region)) +
-  geom_point(alpha = 0.2) +
-  geom_line(alpha = 0.2) +
+  geom_point(alpha = 0.2, show.legend = F) +
+  geom_line(alpha = 0.2, show.legend = F) +
   scale_colour_manual(values = region_col) +
 
   geom_smooth(
-    method    = "gam",
+    method    = "glm",
     linewidth = 1.2,
-    alpha     = 0.15
-  ) +
+    alpha     = 0.05,
+    # formula     = (y) ~ s(x),  # <-- k goes here
+    show.legend = F) +
 
   ## ── 1. force a ONE-column legend ────────────────────────────
   guides(
     colour = guide_legend(ncol = 1)   # 1 column, items stacked
   ) +
+  # ylim(c(0,11.25))+
 
-  labs(colour = "Regions", x = "Year", y = "Average number of HW event") +
+  labs(colour = "Regions", x = "Year", y = "Mean intensity of HW event (°C)") +
 
   ## ── 2. theme tweaks to pin legend inside, top-left ──────────
   theme_minimal(base_size = 18) +
@@ -789,10 +969,12 @@ plot_lines <- ggplot(z_df, aes(x = year, y = mean, colour = region)) +
     legend.key.width      = unit(2, "cm")    # leave if you want wider keys
   )
 
-ggsave("Manuscript/Figs/line_n_event.png", plot_lines, dpi = 300, height =575*3, width = 1319*3, units = "px")
+plot_lines
+
+ggsave("Manuscript/Figs/line_intensity.png", plot_lines, dpi = 300, height =575*3, width = 1319*3, units = "px")
 ###################### MAP of TREND
 
-df_map_freq_long <- stk %>%
+df_map_intensity_long <- stk %>%
   as.data.frame(xy = T) %>% 
   mutate(ID = c(1:nrow(.))) %>% 
   pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
@@ -802,15 +984,15 @@ df_map_freq_long <- stk %>%
   group_by(ID) %>%
   summarise(trend = coef(lm(value ~ year))[2])
 
-df_freq <- stk %>%
+df_intensity <- stk %>%
   as.data.frame(xy = T) %>%  
   mutate(ID = c(1:nrow(.))) %>% 
   dplyr::select(c(x,y,ID))
 
 
-df_trend <- df_map_freq_long %>% 
+df_trend <- df_map_intensity_long %>% 
   # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
-  left_join(df_freq, by = "ID") %>% 
+  left_join(df_intensity, by = "ID") %>% 
   dplyr::select(-ID) %>% 
   relocate(x,y,trend)
 
@@ -819,7 +1001,7 @@ values(rast_trend) <- NA
 
 pts <- vect(df_trend, geom = c("x", "y"), crs = crs(rast_trend))
 
-rast_trend <- rasterize(
+rast_trend <- terra::rasterize(
   pts,             # what to burn
   rast_trend,         # target raster geometry
   field = "trend", # column to transfer
@@ -835,22 +1017,28 @@ qfun <- function(values, ...) {
 # zonal() summarises **all layers at once**
 z_raw_trend <- terra::zonal(rast_trend, zone_rast, fun = qfun)
 
+# 1.  Add centroid geometry and its coordinates to `med_regions`
+med_regions <- med_regions %>%                                 # already an sf multipolygon
+  mutate(centroid = st_centroid(geometry),                     # geometry column is usually called `geometry`
+         lon      = st_coordinates(centroid)[, 1],             # X
+         lat      = st_coordinates(centroid)[, 2])             # Y
+#   └─> use st_point_on_surface(geometry) instead of st_centroid() if you
+#       must ensure the point falls inside every (multi)polygon
+
+# 2.  Keep only what you want to join
+centroids_tbl <- med_regions %>% 
+  st_drop_geometry() %>%                                       # drops *all* sf geometries
+  select(name, lon, lat)  
+
 z_df_trend <- as.data.frame(z_raw_trend)  %>% 
   mutate(region = med_regions$name) %>% 
   dplyr::select(-layer) %>%
-  mutate(mean = round(mean,3),
-         x = case_when(str_detect(region, "Adriatic") ~ 19,
-                       str_detect(region, "Ionian") ~ 11,
-                       str_detect(region, "Western") ~ -2,
-                       str_detect(region, "Aegean") ~ 30),
-         y = case_when(str_detect(region, "Adriatic") ~ 43.5,
-                       str_detect(region, "Ionian") ~ 32,
-                       str_detect(region, "Western") ~ 40,
-                       str_detect(region, "Aegean") ~ 38.5))
+  mutate(mean = round(mean,3)) %>% 
+  left_join(centroids_tbl, by = c("region" = "name"))
 
 
-map_trend <- df_map_freq_long %>% 
-  left_join(df_freq, by = "ID") %>% 
+map_trend <- df_map_intensity_long %>% 
+  left_join(df_intensity, by = "ID") %>% 
   ggplot() +
     ## ── data layers ───────────────────────────────────────────
     geom_tile(aes(x = x, y = y, fill = trend)) +
@@ -858,7 +1046,7 @@ map_trend <- df_map_freq_long %>%
 
     ## ── colour scale ──────────────────────────────────────────
     tidyterra::scale_fill_grass_c(
-      name = "Trends of HW frequency (Event per year)",
+      name = "Trends of HW intensity (°C per year)",
       use_grass_range = FALSE
     ) +
 
@@ -877,9 +1065,9 @@ map_trend <- df_map_freq_long %>%
     coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
 
     ## ── region means & colours ───────────────────────────────
-    geom_text(data = z_df_trend,
-              aes(x = x, y = y, label = mean, colour = region),
-              show.legend = FALSE, size = 10) +
+    geom_label(data = z_df_trend,
+              aes(x = lon, y = lat, label = mean, colour = region),
+              show.legend = FALSE, fill = rgb(1,1,1,0.7), size = 5) +
     scale_colour_manual(values = region_col, name = "") +
 
     ## ── scale bar ────────────────────────────────────────────
@@ -911,7 +1099,9 @@ map_trend <- df_map_freq_long %>%
       axis.title            = element_blank()
     )
 
-ggsave("Manuscript/Figs/trend_frequency.png", map_trend, dpi = 300, height =575*3, width = 1319*3, units = "px")
+map_trend
+
+ggsave("Manuscript/Figs/trend_intensity.png", map_trend, dpi = 300, height =575*3, width = 1319*3, units = "px")
 
 
 ### BOXPLOT
@@ -940,12 +1130,16 @@ vals <- terra::extract(r, vect(reg))            # vect() converts sf → SpatVec
 # Suppose your regions layer has a column called "NAME"
 ID_name <- reg %>% 
       as_tibble() %>%  
-      dplyr::mutate(ID = c(1:4))  %>%       # ensure matching ID
+      dplyr::mutate(ID = c(1:10),
+                    name = as_factor(name))  %>%       # ensure matching ID
       dplyr::select(ID, name)
 
 vals <- vals %>% 
   dplyr::left_join(ID_name,by = "ID") %>% 
-  dplyr::filter(mean != 0)
+  dplyr::filter(mean != 0)%>%                       # your summary data-frame
+  mutate(
+    name = fct_reorder(name, mean, .desc = TRUE)  # order by mean, descending
+  )
 
 # ── 4. plot ─────────────────────────────────────────────────────────────
 plot_boxplot <- ggplot() +
@@ -954,8 +1148,9 @@ plot_boxplot <- ggplot() +
     data          = vals,
     aes(x = name, y = mean, fill = name),
     colour        = "black",
-    linewidth     = .4,
-    alpha         = .60,
+    linewidth     = 0.7,
+    # size = 2,
+    # alpha         = .60,
     outlier.shape = 21,
     outlier.fill  = NA,
     show.legend   = FALSE
@@ -977,7 +1172,7 @@ plot_boxplot <- ggplot() +
   scale_colour_manual(values = region_col, guide = "none") +
 
   guides(fill = guide_legend(
-    ncol       = 1,                 # 1 column ⇒ 4 rows
+    nrow       = 2,                 # 1 column ⇒ 4 rows
     byrow      = TRUE,
     keywidth   = unit(0.6, "cm"),   # square keys
     keyheight  = unit(0.6, "cm")
@@ -985,14 +1180,14 @@ plot_boxplot <- ggplot() +
   ## ---- labels & theme ---------------------------------------------------
   labs(
     x = NULL,
-    y = "Trends of HW frequency (Event per year)"
+    y = "Trends of HW intensity (°C per year)"
   ) +
   theme_minimal(base_size = 18) +
   theme(
     plot.background   = element_rect(fill = "white", colour = NA),
     legend.text       = element_text(size = 13),
 
-    legend.position       = c(0.02, 0.25),   # (x, y) in npc units
+    legend.position       = c(0.02, 0.15),   # (x, y) in npc units
     legend.justification  = c(0, 1),         # anchor by its top-left corner
     legend.direction      = "vertical",      # keeps items vertical
     legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
@@ -1001,11 +1196,14 @@ plot_boxplot <- ggplot() +
     legend.key.width      = unit(2, "cm"),    # leave if you want wider keys
     axis.text.x = element_blank()
   )
+  # ylim(c(0,0.23))
 
-ggsave("Manuscript/Figs/trend_boxplot.png", plot_boxplot, dpi = 300, height =575*3, width = 1319*3, units = "px")
+plot_boxplot
+
+ggsave("Manuscript/Figs/trend_intensity_boxplot.png", plot_boxplot, dpi = 300, height =575*3, width = 1319*3, units = "px")
 ```
 
-```{r Intensity plots building2}
+```{r intensity plots building2}
 #| cache: false
 #| echo: false
 #| warning: false
@@ -1014,20 +1212,502 @@ ggsave("Manuscript/Figs/trend_boxplot.png", plot_boxplot, dpi = 300, height =575
 
 library(magick)
 
-# Adjust the file names / paths
-img_a <- image_read("Manuscript/Figs/Map_MedSea_n_event.png")
-img_b <- image_read("Manuscript/Figs/line_n_event.png")
-img_c <- image_read("Manuscript/Figs/trend_frequency.png")
-img_d <- image_read("Manuscript/Figs/trend_boxplot.png")
+# ── 1. read the four individual plots ───────────────────────────────────
+img_a <- image_read("Manuscript/Figs/Map_MedSea_intensity.png")
+img_b <- image_read("Manuscript/Figs/line_intensity.png")
+img_c <- image_read("Manuscript/Figs/trend_intensity.png")
+img_d <- image_read("Manuscript/Figs/trend_intensity_boxplot.png")
 
+# ── 2. add a corner label to each plot ──────────────────────────────────
+stamp <- function(img, letter,
+                  size = 80,               # point size of the label
+                  gravity = "northwest",   # top-left corner
+                  offset  = "+20+15") {    # x,y offset from the corner
+  image_annotate(
+    img, letter,
+    font      = "Helvetica-Bold",
+    size      = size,
+    gravity   = gravity,
+    location  = offset,
+    color     = "black",
+    boxcolor  = "white",   # gives a small white rectangle behind the letter
+    weight    = 700        # ensures the stroke is bold
+  )
+}
+
+img_a <- stamp(img_a, "A")
+img_b <- stamp(img_b, "B")
+img_c <- stamp(img_c, "C")
+img_d <- stamp(img_d, "D")
+
+# ── 3. assemble the composite exactly as before ─────────────────────────
 row1  <- image_append(c(img_a, img_b), stack = FALSE)  # side-by-side
 row2  <- image_append(c(img_c, img_d), stack = FALSE)
 
 combo <- image_append(c(row1, row2),   stack = TRUE)   # one above the other
 
-image_write(combo, path = "Manuscript/Figs/plot_n_events.png")
+image_write(combo, path = "Manuscript/Figs/plot_intensity.png")
 
 ```
 
 
+### Duration 
+
+```{r Duration plots building1}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(terra)
+library(viridisLite)
+library(ggspatial)
+library(Utilities.Package)
+
+
+region_col <- c(
+  # greens
+  "Levantine Sea" = "#008F1A",   # brighter pine-green
+  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
+  
+  # blues / teals / purples
+  "Alboran Sea"   = "#414E7C",   # richer slate-blue
+  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
+  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
+  
+  # yellows / ochres
+  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
+  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
+  
+  # reds / oranges / browns
+  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
+  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
+  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
+)
+# Load your shapefile (replace with your path)
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black"))
+
+# Get world land polygons
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+
+filelist <- "Outputs/SST/nc/duration_mean" %>% 
+  list.files(full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = value) %>% 
+  mutate(file = gsub(".*/","",path),
+         year = substr(file,15,18))
+
+
+stk <- filelist$path %>% 
+  rast() 
+
+names(stk) <- filelist$year
+
+# stk[is.na(stk)] <- 0  
+
+stk_avg <- mean(stk, na.rm = T)
+
+map_duration <- ggplot() +
+  ## ── data layers ─────────────────────────────────────────────
+  tidyterra::geom_spatraster(data = stk_avg,
+                             aes(fill = mean)) + 
+  geom_sf(data = world, fill = "grey80", color = NA) +
+  ## ── colour scales ───────────────────────────────────────────
+  scale_fill_gradientn(
+    colours  = turbo(10),
+    na.value = "transparent",
+    name     = "Mean duration of HW events (days)"
+  ) +
+    ## ── horizontal guide with title on top ──────────────────────
+  guides(
+    fill = guide_colourbar(
+      direction      = "horizontal",
+      title.position = "top",
+      label.position = "bottom",            # optional – labels below bar
+      barwidth       = unit(5, "cm"),       # tweak length
+      barheight      = unit(0.45, "cm")     # tweak thickness
+    )
+  ) +
+  ## ── map extent ──────────────────────────────────────────────
+  coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+  ## ── *** scale bar *** ───────────────────────────────────────
+  annotation_scale(
+    location   = "bl",   # bottom-left
+    width_hint = 0.25,   # ≈25 % of the map width
+    line_width = 0.6,
+    text_cex   = 2,
+    pad_x      = unit(0.4, "cm"),
+    pad_y      = unit(0.4, "cm")
+  ) +
+  ## ── theme ───────────────────────────────────────────────────
+  theme_minimal(base_size = 18) +
+  theme(
+    panel.grid        = element_line(color = "gray90"),
+    panel.background  = element_rect(fill = "aliceblue"),
+    plot.background   = element_rect(fill = "white", color = NA),
+
+    # move legend INSIDE, upper-left; anchor by its top-left corner
+    legend.position       = c(0.02, 0.98),   # npc coords (x = 2 %, y = 98 %)
+    legend.justification  = c(0, 1),
+    legend.direction      = "horizontal",
+
+    legend.title.align    = 0.5,             # centre title
+    legend.text           = element_text(size = 13),
+
+    # give legend a white background & a bit of padding
+    legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA,linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4)
+  )
+
+map_duration
+
+ggsave("Manuscript/Figs/Map_MedSea_duration.png", map_duration, dpi = 300, height =575*3, width = 1319*3, units = "px")
+
+############ Line plot by region
+med_regions <- st_transform(med_regions, crs(stk))
+
+# med_regions <- st_zm(med_regions)
+
+zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
+plot(zone_rast)
+# Function that terra::zonal will apply: returns a 3-element vector
+qfun <- function(values, ...) {
+  mean(values, na.rm = TRUE)
+}
+
+# zonal() summarises **all layers at once**
+z_raw <- terra::zonal(stk, zone_rast, fun = qfun)
+
+z_df <- as.data.frame(z_raw)  %>% 
+  mutate(region = med_regions$name) %>% 
+  dplyr::select(-layer) %>% # attach names
+  pivot_longer(c(-region),
+               names_to   = "year",
+               values_to = "mean") %>% 
+  mutate(year = as.numeric(year))
+
+
+plot_lines <- ggplot(z_df, aes(x = year, y = mean, colour = region)) +
+  geom_point(alpha = 0.2, show.legend = F) +
+  geom_line(alpha = 0.2, show.legend = F) +
+  scale_colour_manual(values = region_col) +
+
+  geom_smooth(
+    method    = "gam",
+    linewidth = 1.2,
+    alpha     = 0.05,
+    formula     = (y) ~ s(x, k = 3),  # <-- k goes here
+    show.legend = F) +
+
+  ## ── 1. force a ONE-column legend ────────────────────────────
+  guides(
+    colour = guide_legend(ncol = 1)   # 1 column, items stacked
+  ) +
+  # ylim(c(0,11.25))+
+
+  labs(colour = "Regions", x = "Year", y = "Mean duration of HW events (days)") +
+
+  ## ── 2. theme tweaks to pin legend inside, top-left ──────────
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.background   = element_rect(fill = "white", colour = NA),
+    legend.text       = element_text(size = 13),
+
+    legend.position       = c(0.02, 0.98),   # (x, y) in npc units
+    legend.justification  = c(0, 1),         # anchor by its top-left corner
+    legend.direction      = "vertical",      # keeps items vertical
+    legend.background     = element_rect(fill = "white", colour = NA, linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4),
+
+    legend.key.width      = unit(2, "cm")    # leave if you want wider keys
+  )
+
+plot_lines
+
+ggsave("Manuscript/Figs/line_duration.png", plot_lines, dpi = 300, height =575*3, width = 1319*3, units = "px")
+###################### MAP of TREND
+
+df_map_duration_long <- stk %>%
+  as.data.frame(xy = T) %>% 
+  mutate(ID = c(1:nrow(.))) %>% 
+  pivot_longer(-c(ID,x,y), values_to = "value", names_to = "year") %>% 
+  mutate(value = case_when(is.na(value) ~ 0,
+                           T ~ value)) %>% 
+  mutate(year = as.numeric(year)) %>% 
+  group_by(ID) %>%
+  summarise(trend = coef(lm(value ~ year))[2])
+
+df_duration <- stk %>%
+  as.data.frame(xy = T) %>%  
+  mutate(ID = c(1:nrow(.))) %>% 
+  dplyr::select(c(x,y,ID))
+
+
+df_trend <- df_map_duration_long %>% 
+  # dplyr::filter(trend < quantile(trend, probs = 0.95)) %>% 
+  left_join(df_duration, by = "ID") %>% 
+  dplyr::select(-ID) %>% 
+  relocate(x,y,trend)
+
+rast_trend <- stk$`1982`
+values(rast_trend) <- NA
+
+pts <- vect(df_trend, geom = c("x", "y"), crs = crs(rast_trend))
+
+rast_trend <- terra::rasterize(
+  pts,             # what to burn
+  rast_trend,         # target raster geometry
+  field = "trend", # column to transfer
+  fun   = "mean"   # how to handle duplicate points (mean, max, sum, …)
+)
+
+# Function that terra::zonal will apply: returns a 3-element vector
+qfun <- function(values, ...) {
+  mean(values, na.rm = TRUE)
+}
+
+
+# zonal() summarises **all layers at once**
+z_raw_trend <- terra::zonal(rast_trend, zone_rast, fun = qfun)
+
+# 1.  Add centroid geometry and its coordinates to `med_regions`
+med_regions <- med_regions %>%                                 # already an sf multipolygon
+  mutate(centroid = st_centroid(geometry),                     # geometry column is usually called `geometry`
+         lon      = st_coordinates(centroid)[, 1],             # X
+         lat      = st_coordinates(centroid)[, 2])             # Y
+#   └─> use st_point_on_surface(geometry) instead of st_centroid() if you
+#       must ensure the point falls inside every (multi)polygon
+
+# 2.  Keep only what you want to join
+centroids_tbl <- med_regions %>% 
+  st_drop_geometry() %>%                                       # drops *all* sf geometries
+  select(name, lon, lat)  
+
+z_df_trend <- as.data.frame(z_raw_trend)  %>% 
+  mutate(region = med_regions$name) %>% 
+  dplyr::select(-layer) %>%
+  mutate(mean = round(mean,3)) %>% 
+  left_join(centroids_tbl, by = c("region" = "name"))
+
+
+map_trend <- df_map_duration_long %>% 
+  left_join(df_duration, by = "ID") %>% 
+  ggplot() +
+    ## ── data layers ───────────────────────────────────────────
+    geom_tile(aes(x = x, y = y, fill = trend)) +
+    geom_sf(data = world, fill = "grey80", colour = NA) +
+
+    ## ── colour scale ──────────────────────────────────────────
+    tidyterra::scale_fill_grass_c(
+      name = "Trends of HW duration (days per year)",
+      use_grass_range = FALSE 
+      # trans = "asn"
+    ) +
+
+    ## ── 1. horizontal colour bar, title on top ───────────────
+    guides(
+      fill = guide_colourbar(
+        direction      = "horizontal",
+        title.position = "top",
+        label.position = "bottom",            # labels under the bar (optional)
+        barwidth       = unit(10, "cm"),       # adjust length
+        barheight      = unit(0.45, "cm")     # adjust thickness
+      )
+    ) +
+
+    ## ── map extent ───────────────────────────────────────────
+    coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+
+    ## ── region means & colours ───────────────────────────────
+    geom_label(data = z_df_trend,
+              aes(x = lon, y = lat, label = mean, colour = region),
+              show.legend = FALSE, fill = rgb(1,1,1,0.7), size = 5) +
+    scale_colour_manual(values = region_col, name = "") +
+
+    ## ── scale bar ────────────────────────────────────────────
+    annotation_scale(
+      location   = "bl",
+      width_hint = 0.25,
+      line_width = 0.6,
+      text_cex   = 2,
+      pad_x      = unit(0.4, "cm"),
+      pad_y      = unit(0.4, "cm")
+    ) +
+
+    ## ── theme ────────────────────────────────────────────────
+    theme_minimal(base_size = 18) +
+    theme(
+      panel.grid        = element_line(colour = "gray90"),
+      panel.background  = element_rect(fill = "aliceblue"),
+      plot.background   = element_rect(fill = "white", colour = NA),
+
+      # 2. park legend INSIDE, top-left
+      legend.position       = c(0.02, 0.98),  # npc coords: 2 % from left, 98 % up
+      legend.justification  = c(0, 1),        # anchor by its top-left corner
+      legend.direction      = "horizontal",
+
+      legend.text           = element_text(size = 13),
+      legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
+      legend.margin         = margin(4, 4, 4, 4),
+
+      axis.title            = element_blank()
+    )
+
+map_trend
+
+ggsave("Manuscript/Figs/trend_duration.png", map_trend, dpi = 300, height =575*3, width = 1319*3, units = "px")
+
+
+### BOXPLOT
+
+# ── libraries ───────────────────────────────────────────────────────────
+library(terra)   # raster/terra objects
+library(sf)      # modern vector data
+library(ggplot2) # plotting
+library(dplyr)   # pipe-friendly helpers (optional)
+
+# ── 1. load data ────────────────────────────────────────────────────────
+r   <- rast_trend         # single- or multi-band
+reg <- med_regions           # polygons
+
+# Make sure both layers share the same CRS
+reg <- st_transform(reg, crs(r))
+
+# ── 2. extract values per polygon ───────────────────────────────────────
+# terra::extract() returns a data.frame: one row per cell per polygon
+#   ID   = polygon index (generated automatically)
+#   lyr1 = raster value (one column per raster layer)
+#
+vals <- terra::extract(r, vect(reg))            # vect() converts sf → SpatVector
+
+# ── 3. tidy up: attach region names / attributes ───────────────────────
+# Suppose your regions layer has a column called "NAME"
+ID_name <- reg %>% 
+      as_tibble() %>%  
+      dplyr::mutate(ID = c(1:10),
+                    name = as_factor(name))  %>%       # ensure matching ID
+      dplyr::select(ID, name)
+
+vals <- vals %>% 
+  dplyr::left_join(ID_name,by = "ID") %>% 
+  dplyr::filter(mean != 0)%>%                       # your summary data-frame
+  mutate(
+    name = fct_reorder(name, mean, .desc = TRUE)  # order by mean, descending
+  )
+
+# ── 4. plot ─────────────────────────────────────────────────────────────
+plot_boxplot <- ggplot() +
+  # 1. data layer (legend suppressed)
+  geom_boxplot(
+    data          = vals,
+    aes(x = name, y = mean, fill = name),
+    colour        = "black",
+    linewidth     = 0.7,
+    # size = 2,
+    # alpha         = .60,
+    outlier.shape = 21,
+    outlier.fill  = NA,
+    show.legend   = FALSE
+  ) +
+
+  # 2. dummy layer that only feeds the legend (square keys)
+  geom_point(
+    data = tibble(name = names(region_col), x = NA_real_, y = NA_real_),
+    aes(x, y, fill = name),
+    shape        = 22,        # solid square
+    size         = 6,
+    stroke       = 0,
+    show.legend  = TRUE,
+    inherit.aes  = FALSE
+  )+
+
+  ## ---- scales -----------------------------------------------------------
+  scale_fill_manual(values = region_col, name = "Region") +
+  scale_colour_manual(values = region_col, guide = "none") +
+
+  guides(fill = guide_legend(
+    nrow       = 2,                 # 1 column ⇒ 4 rows
+    byrow      = TRUE,
+    keywidth   = unit(0.6, "cm"),   # square keys
+    keyheight  = unit(0.6, "cm")
+  )) +
+  ## ---- labels & theme ---------------------------------------------------
+  labs(
+    x = NULL,
+    y = "Trends of HW duration (days per year)"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.background   = element_rect(fill = "white", colour = NA),
+    legend.text       = element_text(size = 13),
+
+    legend.position       = c(0.02, 0.15),   # (x, y) in npc units
+    legend.justification  = c(0, 1),         # anchor by its top-left corner
+    legend.direction      = "vertical",      # keeps items vertical
+    legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA, linewidth = 0.2),
+    legend.margin         = margin(4, 4, 4, 4),
+
+    legend.key.width      = unit(2, "cm"),    # leave if you want wider keys
+    axis.text.x = element_blank()
+  )
+  # ylim(c(0,0.23))
+
+plot_boxplot
+
+ggsave("Manuscript/Figs/trend_duration_boxplot.png", plot_boxplot, dpi = 300, height =575*3, width = 1319*3, units = "px")
+```
+
+```{r duration plots building2}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+
+library(magick)
+
+# ── 1. read the four individual plots ───────────────────────────────────
+img_a <- image_read("Manuscript/Figs/Map_MedSea_duration.png")
+img_b <- image_read("Manuscript/Figs/line_duration.png")
+img_c <- image_read("Manuscript/Figs/trend_duration.png")
+img_d <- image_read("Manuscript/Figs/trend_duration_boxplot.png")
+
+# ── 2. add a corner label to each plot ──────────────────────────────────
+stamp <- function(img, letter,
+                  size = 80,               # point size of the label
+                  gravity = "northwest",   # top-left corner
+                  offset  = "+20+15") {    # x,y offset from the corner
+  image_annotate(
+    img, letter,
+    font      = "Helvetica-Bold",
+    size      = size,
+    gravity   = gravity,
+    location  = offset,
+    color     = "black",
+    boxcolor  = "white",   # gives a small white rectangle behind the letter
+    weight    = 700        # ensures the stroke is bold
+  )
+}
+
+img_a <- stamp(img_a, "A")
+img_b <- stamp(img_b, "B")
+img_c <- stamp(img_c, "C")
+img_d <- stamp(img_d, "D")
+
+# ── 3. assemble the composite exactly as before ─────────────────────────
+row1  <- image_append(c(img_a, img_b), stack = FALSE)  # side-by-side
+row2  <- image_append(c(img_c, img_d), stack = FALSE)
+
+combo <- image_append(c(row1, row2),   stack = TRUE)   # one above the other
+
+image_write(combo, path = "Manuscript/Figs/plot_duration.png")
+
+```
 
