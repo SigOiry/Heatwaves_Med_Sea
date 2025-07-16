@@ -8,6 +8,6 @@ Outputs/SST/all_data_SST.csv
 Outputs/SST/Cropped_CSV/*
 Outputs/SST/HW_detection/*
 Outputs/SST/IAD/*
-Outputs/SST/SST_Phenology/doy/*
+Outputs/SST/SST_Phenology/*
 Outputs/SST/Summary_per_year_per_pixel/*
 Data/SST/*

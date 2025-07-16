@@ -215,6 +215,8 @@ HW metrics where summerised for each regions of the Mediterranean sea, following
 
 ## SST phenology
 
+### Maps
+
 ```{r SST phenology}
 #| cache: false
 #| echo: false
@@ -235,7 +237,7 @@ List_HW_csv <- list.files("Outputs/SST/Cropped_CSV/", pattern = ".csv",recursive
          doy = yday(Date))
 
 
-for (i in 343:max(unique(List_HW_csv$doy))) {
+for (i in unique(List_HW_csv$doy)) {
   
   print(i)
   
@@ -323,19 +325,557 @@ rm(df_lazy)
 
 fwrite(pheno_date, paste0("Outputs/SST/SST_Phenology/doy/", "SST_Pheno_DOY_",i,".csv"))
 }
-```
-
-```{r plotting}
-
-df1 <- read.csv("Outputs/SST/SST_Phenology/doy/SST_Pheno_DOY_100.csv") %>% 
-  dplyr::filter(split == "all")
-
-df1 %>% 
-  ggplot(aes(x = x, y = y, fill = mean))+
-  geom_tile()
 
 ```
 
+```{r batch ploting climatology}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(rnaturalearth)
+library(data.table)
+library(viridis)
+library(tidyterra)
+library(ggpp)
+
+
+
+filelist <- list.files("Outputs/SST/SST_Phenology/doy/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         doy = gsub("[^0-9]","",file) %>% 
+           as.numeric()) %>% 
+  arrange(doy)
+
+
+# Initialize min and max
+global_min <- Inf
+global_max <- -Inf
+
+# Loop through files
+for (file in filelist$path) {
+  # Read only the column you need (e.g., "SST")
+  dt <- fread(file, select = "mean", showProgress = FALSE)
+  
+  # Update global min and max
+  global_min <- min(global_min, min(dt$mean, na.rm = TRUE))
+  global_max <- max(global_max, max(dt$mean, na.rm = TRUE))
+}
+
+# Output
+cat("Global min SST:", global_min, "\n")
+cat("Global max SST:", global_max, "\n")
+
+
+region_col <- c(
+  # greens
+  "Levantine Sea" = "#008F1A",   # brighter pine-green
+  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
+  
+  # blues / teals / purples
+  "Alboran Sea"   = "#414E7C",   # richer slate-blue
+  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
+  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
+  
+  # yellows / ochres
+  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
+  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
+  
+  # reds / oranges / browns
+  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
+  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
+  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
+)
+# Load your shapefile (replace with your path)
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black"))
+
+# Get world land polygons
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+
+#### Plot clock 
+
+
+# Define DOY
+doy <- 1:366
+df <- tibble(
+  doy = doy,
+  angle = -2 * pi * (doy / 366) + pi/2,   # clockwise + 90° rotation
+  # angle = -2 * pi * (doy / 366), 
+  x = cos(angle),
+  y = sin(angle)
+)
+
+# Define 15th of each month
+dates <- ymd("2024-01-15") + months(0:11)
+month_labels <- tibble(
+  month = lubridate::month(dates, label = TRUE, locale = "UTC"),
+  doy = yday(dates),
+  angle = -2 * pi * (doy / 366) + pi/2,
+  x = 0.8 * cos(angle),  # inside the circle
+  y = 0.8 * sin(angle)
+)
+
+# Ticks at 1st of each month
+dates_ticks <- ymd("2024-01-01") + months(0:11)
+month_ticks <- tibble(
+  doy = yday(dates_ticks),
+  angle = -2 * pi * (doy / 366) + pi/2,
+  x_start = 0.95 * cos(angle),
+  y_start = 0.95 * sin(angle),
+  x_end = 1.05 * cos(angle),
+  y_end = 1.05 * sin(angle)
+)
+
+
+# Plot
+raw_clock <- ggplot(df, aes(x = x, y = y)) +
+  geom_path(linewidth = 1, color = "steelblue") +
+  geom_segment(data = month_ticks, aes(x = x_start, y = y_start, xend = x_end, yend = y_end),
+               linewidth = 0.8, color = "black") +
+  geom_text(data = month_labels, aes(label = month), size = 4) +
+  coord_equal() +
+  theme_void()
+
+
+output_plots <- "Outputs/SST/SST_Phenology/plots/"
+
+for (i in filelist$doy) {
+  
+  df <- fread(filelist$path[i])
+  
+  angle_today <- -2 * pi * (i / 366) + pi/2
+  point_today <- tibble(
+    x = 1.0 * cos(angle_today),
+    y = 1.0 * sin(angle_today)
+  )  
+  
+  plot_clock <- raw_clock + 
+      geom_point(data = point_today, aes(x = x, y = y), color = "red", size = 4) 
+  
+  clock_grob <- ggplotGrob(plot_clock)
+  
+  for (ii in unique(df$split)) {
+    
+    df_split <- df %>% 
+      dplyr::filter(split == ii)
+    
+    map <- ggplot() +
+      geom_tile(data = df_split, mapping = aes(x = x, y = y, fill = mean))+
+      geom_sf(data = world, fill = "grey80", color = NA) +
+      scale_fill_grass_c("celsius",
+                         use_grass_range = FALSE,
+                         limits = c(global_min,global_max),
+                         name     = paste0("Avg SST (", ii, ")"))+
+      ## ── colour scales ───────────────────────────────────────────
+      # scale_fill_gradientn(
+      #   colours  = turbo(5),
+      #   na.value = "transparent",
+      #   name     = "Avg number of Event per Year",
+      #   limits = c(10,15)
+      # ) +
+        ## ── horizontal guide with title on top ──────────────────────
+      guides(
+        fill = guide_colourbar(
+          direction      = "horizontal",
+          title.position = "top",
+          label.position = "bottom",            # optional – labels below bar
+          barwidth       = unit(9.5, "cm"),       # tweak length
+          barheight      = unit(0.45, "cm")     # tweak thickness
+        )
+      ) +
+      ## ── map extent ──────────────────────────────────────────────
+      coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+      ## ── *** scale bar *** ───────────────────────────────────────
+      annotation_scale(
+        location   = "bl",   # bottom-left
+        width_hint = 0.25,   # ≈25 % of the map width
+        line_width = 0.6,
+        text_cex   = 2,
+        pad_x      = unit(0.4, "cm"),
+        pad_y      = unit(0.4, "cm")
+      ) +
+      ## ── theme ───────────────────────────────────────────────────
+      theme_minimal(base_size = 18) +
+      theme(
+        panel.grid        = element_line(color = "gray90"),
+        panel.background  = element_rect(fill = "aliceblue"),
+        plot.background   = element_rect(fill = "white", color = NA),
+    
+        # move legend INSIDE, upper-left; anchor by its top-left corner
+        legend.position       = c(0.02, 0.98),   # npc coords (x = 2 %, y = 98 %)
+        legend.justification  = c(0, 1),
+        legend.direction      = "horizontal",
+    
+        legend.title.align    = 0.5,             # centre title
+        legend.text           = element_text(size = 13),
+    
+        # give legend a white background & a bit of padding
+        legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA,linewidth = 0.2),
+        legend.margin         = margin(4, 4, 4, 4),
+        axis.title = element_blank()
+      ) +
+  annotation_custom(
+    grob  = clock_grob,
+    xmin  = -9,   # change as needed for position
+    xmax  = -1,   # define width
+    ymin  = 36,   # change as needed for vertical placement
+    ymax  = 44    # define height
+  )
+    
+    ggsave(paste0(output_plots,"/",ii,"/map_",ii,"_DOY_",i,".png"),map,dpi = 300, height =575*3, width = 1319*3, units = "px")
+  }
+  
+}
+
+
+
+```
+
+```{r gif}
+#| include: false
+#| message: false
+#| warning: false
+#| error: false
+#| eval: false
+
+library(tidyverse)
+library(magick)
+
+files <- list.files("Outputs/SST/SST_Phenology/plots/1982-1991", pattern = ".png", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  pull(path)
+
+gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/GIF_1982-1991.gif",
+               delay = 0.1, loop = TRUE, progress = TRUE,width=3957/4,height=1725/4)
+
+files <- list.files("Outputs/SST/SST_Phenology/plots/1992-2001", pattern = ".png", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  pull(path)
+
+gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/GIF_1992-2001.gif",
+               delay = 0.1, loop = TRUE, progress = TRUE,width=3957/4,height=1725/4)
+
+files <- list.files("Outputs/SST/SST_Phenology/plots/2002-2011", pattern = ".png", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  pull(path)
+
+gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/GIF_2002-2011.gif",
+               delay = 0.1, loop = TRUE, progress = TRUE,width=3957/4,height=1725/4)
+
+files <- list.files("Outputs/SST/SST_Phenology/plots/2012-2024", pattern = ".png", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  pull(path)
+
+gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/GIF_2012-2024.gif",
+               delay = 0.1, loop = TRUE, progress = TRUE,width=3957/4,height=1725/4)
+
+
+#### COmbine 
+
+gif_list1 <- list.files("Outputs/SST/SST_Phenology/plots/1982-1991", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(split1 = "value") %>% 
+  mutate(file = gsub(".*/","",split1),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  dplyr::select(-file)
+
+gif_list2 <- list.files("Outputs/SST/SST_Phenology/plots/2012-2024", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(split2 = "value") %>% 
+  mutate(file = gsub(".*/","",split2),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  dplyr::select(-file)
+
+df_list <- gif_list1 %>% 
+  left_join(gif_list2, by = "num")
+
+for (i in df_list$num) {
+  
+  img1 <- image_read(df_list$split1[i])
+  img2 <- image_read(df_list$split2[i])
+
+  combo <- image_append(c(img1, img2),   stack = TRUE)   # one above the other
+
+  image_write(combo, path = paste0("Outputs/SST/SST_Phenology/plots/Merged/combo_",i,".png"))
+}
+
+files <- list.files("Outputs/SST/SST_Phenology/plots/Merged", pattern = ".png", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  pull(path)
+
+gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/Merged_1982-1991-2012-2024.gif",
+               delay = 0.1, loop = TRUE, progress = TRUE,width=3957/2,height=3450/2)
+
+
+```
+
+### Compare 1982-1991 to 2012-2024
+
+
+```{r map building}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(terra)
+library(viridisLite)
+library(ggspatial)
+library(Utilities.Package)
+library(tidyterra)
+
+filelist <- list.files("Outputs/SST/SST_Phenology/doy/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         doy = gsub("[^0-9]","",file) %>% 
+           as.numeric()) %>% 
+  arrange(doy)
+
+
+for (i in filelist$doy) {
+  
+  df <- fread(filelist$path[i]) %>% 
+    dplyr::filter(split %in% c("1982-1991","2012-2024")) %>% 
+    dplyr::select(x,y,split,mean) %>% 
+    pivot_wider(names_from = split, values_from = mean) %>% 
+    mutate(diff = `2012-2024` - `1982-1991`, 
+           doy = i) %>%
+    dplyr::select(x,y,diff,doy)
+    
+
+  fwrite(df,paste0("Outputs/SST/SST_Phenology/diff_splits/Diff_1982-1991-2012-2024_DOY_",i,".csv"))
+}
+
+
+
+filelist <- list.files("Outputs/SST/SST_Phenology/diff_splits/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         doy = gsub(".*_","",file) %>% gsub(".csv","",.) %>% 
+           as.numeric()) %>% 
+  arrange(doy)
+
+
+# Initialize min and max
+global_min <- Inf
+global_max <- -Inf
+
+# Loop through files
+for (file in filelist$path) {
+  # Read only the column you need (e.g., "SST")
+  dt <- fread(file, select = "diff", showProgress = FALSE)
+  
+  # Update global min and max
+  global_min <- min(global_min, min(dt$diff, na.rm = TRUE))
+  global_max <- max(global_max, max(dt$diff, na.rm = TRUE))
+}
+
+
+region_col <- c(
+  # greens
+  "Levantine Sea" = "#008F1A",   # brighter pine-green
+  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
+  
+  # blues / teals / purples
+  "Alboran Sea"   = "#414E7C",   # richer slate-blue
+  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
+  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
+  
+  # yellows / ochres
+  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
+  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
+  
+  # reds / oranges / browns
+  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
+  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
+  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
+)
+# Load your shapefile (replace with your path)
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black"))
+
+# Get world land polygons
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+
+#### Plot clock 
+
+
+# Define DOY
+doy <- 1:366
+df <- tibble(
+  doy = doy,
+  angle = -2 * pi * (doy / 366) + pi/2,   # clockwise + 90° rotation
+  # angle = -2 * pi * (doy / 366), 
+  x = cos(angle),
+  y = sin(angle)
+)
+
+# Define 15th of each month
+dates <- ymd("2024-01-15") + months(0:11)
+month_labels <- tibble(
+  month = lubridate::month(dates, label = TRUE, locale = "UTC"),
+  doy = yday(dates),
+  angle = -2 * pi * (doy / 366) + pi/2,
+  x = 0.8 * cos(angle),  # inside the circle
+  y = 0.8 * sin(angle)
+)
+
+# Ticks at 1st of each month
+dates_ticks <- ymd("2024-01-01") + months(0:11)
+month_ticks <- tibble(
+  doy = yday(dates_ticks),
+  angle = -2 * pi * (doy / 366) + pi/2,
+  x_start = 0.95 * cos(angle),
+  y_start = 0.95 * sin(angle),
+  x_end = 1.05 * cos(angle),
+  y_end = 1.05 * sin(angle)
+)
+
+
+# Plot
+raw_clock <- ggplot(df, aes(x = x, y = y)) +
+  geom_path(linewidth = 1, color = "steelblue") +
+  geom_segment(data = month_ticks, aes(x = x_start, y = y_start, xend = x_end, yend = y_end),
+               linewidth = 0.8, color = "black") +
+  geom_text(data = month_labels, aes(label = month), size = 4) +
+  coord_equal() +
+  theme_void()
+
+
+output_plots <- "Outputs/SST/SST_Phenology/plots/"
+
+for (i in filelist$doy) {
+  
+  df <- fread(filelist$path[i])
+  
+  angle_today <- -2 * pi * (i / 366) + pi/2
+  point_today <- tibble(
+    x = 1.0 * cos(angle_today),
+    y = 1.0 * sin(angle_today)
+  )  
+  
+  plot_clock <- raw_clock + 
+      geom_point(data = point_today, aes(x = x, y = y), color = "red", size = 4) 
+  
+  clock_grob <- ggplotGrob(plot_clock)
+  
+
+    
+    map <- ggplot() +
+      geom_tile(data = df, mapping = aes(x = x, y = y, fill = diff))+
+      geom_sf(data = world, fill = "grey80", color = NA) +
+      scale_fill_gradientn(
+  name = "SST mean difference\n1982–1991 to 2012–2024",
+  colours = c("#2166AC", "#67A9CF", "#D1E5F0",  # Negative (dark to light blue)
+              "white",                         # Midpoint (0)
+              "#4FF76B", "#088548","#FFBA0A","#D40B0B", "#990E99"),# Positive (light to dark red)
+  values = scales::rescale(c(global_min, -1, -0.1, 0, 0.1, 1, 2,3, global_max)),
+  limits = c(global_min, global_max)
+)+
+
+      guides(
+        fill = guide_colourbar(
+          direction      = "horizontal",
+          title.position = "top",
+          label.position = "bottom",            # optional – labels below bar
+          barwidth       = unit(9.5, "cm"),       # tweak length
+          barheight      = unit(0.45, "cm")     # tweak thickness
+        )
+      ) +
+      ## ── map extent ──────────────────────────────────────────────
+      coord_sf(xlim = c(-10, 40), ylim = c(30, 47), expand = FALSE) +
+      ## ── *** scale bar *** ───────────────────────────────────────
+      annotation_scale(
+        location   = "bl",   # bottom-left
+        width_hint = 0.25,   # ≈25 % of the map width
+        line_width = 0.6,
+        text_cex   = 2,
+        pad_x      = unit(0.4, "cm"),
+        pad_y      = unit(0.4, "cm")
+      ) +
+      ## ── theme ───────────────────────────────────────────────────
+      theme_minimal(base_size = 18) +
+      theme(
+        panel.grid        = element_line(color = "gray90"),
+        panel.background  = element_rect(fill = "aliceblue"),
+        plot.background   = element_rect(fill = "white", color = NA),
+    
+        # move legend INSIDE, upper-left; anchor by its top-left corner
+        legend.position       = c(0.02, 0.98),   # npc coords (x = 2 %, y = 98 %)
+        legend.justification  = c(0, 1),
+        legend.direction      = "horizontal",
+    
+        legend.title.align    = 0.5,             # centre title
+        legend.text           = element_text(size = 13),
+    
+        # give legend a white background & a bit of padding
+        legend.background     = element_rect(fill = rgb(1,1,1,0.5), colour = NA,linewidth = 0.2),
+        legend.margin         = margin(4, 4, 4, 4),
+        axis.title = element_blank()
+      ) +
+  annotation_custom(
+    grob  = clock_grob,
+    xmin  = -9,   # change as needed for position
+    xmax  = -1,   # define width
+    ymin  = 35.5,   # change as needed for vertical placement
+    ymax  = 43.5    # define height
+  )
+    
+    ggsave(paste0(output_plots,"/Difference/map_differences_DOY_",i,".png"),map,dpi = 300, height =575*3, width = 1319*3, units = "px")
+
+  
+}
+
+  
+
+files <- list.files("Outputs/SST/SST_Phenology/plots/Difference", pattern = ".png", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         num = gsub(".*_","",file) %>% gsub(".png","",.) %>% as.numeric()) %>% 
+  arrange(num) %>% 
+  pull(path)
+
+gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/Difference_1982-1991-2012-2024.gif",
+               delay = 0.1, loop = TRUE, progress = TRUE,width=3957/2,height=1725/2)
+
+```
 
 
 ## Heatwaves
@@ -1251,7 +1791,7 @@ image_write(combo, path = "Manuscript/Figs/plot_intensity.png")
 ```
 
 
-### Duration 
+#uration 
 
 ```{r Duration plots building1}
 #| cache: false
