@@ -2,7 +2,7 @@
 title: Marine Heatwaves in a warming Mediterranean Sea
 subtitle: A temporale analysis
 author:
-  - name: Simon Oiry^[Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France]
+  - name: Simon Oiry
     orcid: 0000-0001-7161-5246
     corresponding: true
     email: oirysimon@gmail.com
@@ -12,14 +12,15 @@ author:
       - Data acquisition
     affiliations:
       - Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France
-      - Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy
-  - name: Maria Laura Zoffoli^[Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy]
+  - name: Maria Laura Zoffoli
     orcid: 0000-0003-1892-0051
     corresponding: false
     roles: 
       - Data acquisition
       - Revision
-  - name: Christian Marchese^[Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy]
+    affiliations:
+      - Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy
+  - name: Christian Marchese
     orcid: 0000-0002-2414-9251
     corresponding: false
     roles: 
@@ -27,7 +28,7 @@ author:
       - Revision
     affiliations:
       - Consiglio Nazionale delle Ricerche, Istituto di Scienze Marine (CNR-ISMAR), 00133 Rome, Italy
-  - name: Laurent Barillé^[Institut des Substances et Organismes de la Mer, ISOMer, Nantes Université, UR 2160, F-44000 Nantes, France]
+  - name: Laurent Barillé
     orcid: 0000-0001-5138-2684
     corresponding: false
     roles: 
@@ -1791,7 +1792,7 @@ image_write(combo, path = "Manuscript/Figs/plot_intensity.png")
 ```
 
 
-#uration 
+### Duration 
 
 ```{r Duration plots building1}
 #| cache: false
