@@ -69,6 +69,28 @@ library(ggnewscale)
 library(ggspatial)
 library(ggrastr)
 library(Utilities.Package)
+
+
+
+region_col <- c(
+  # greens
+  "Levantine Sea" = "#008F1A",   # brighter pine-green
+  "Adriatic sea"  = "#6B9C3C",   # vivid olive-sage
+  
+  # blues / teals / purples
+  "Alboran Sea"   = "#414E7C",   # richer slate-blue
+  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
+  "Sea of Sicily" = "#583C68",   # deeper indigo-violet
+  
+  # yellows / ochres
+  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
+  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
+  
+  # reds / oranges / browns
+  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
+  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
+  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
+)
 ```
 
 # Introduction 
@@ -115,26 +137,6 @@ library(rnaturalearth)
 library(rnaturalearthdata)
 library(tidyverse)
 library(ggspatial)
-
-region_col <- c(
-  # greens
-  "Levantine Sea" = "#008F1A",   # brighter pine-green
-  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
-  
-  # blues / teals / purples
-  "Alboran Sea"   = "#414E7C",   # richer slate-blue
-  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
-  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
-  
-  # yellows / ochres
-  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
-  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
-  
-  # reds / oranges / browns
-  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
-  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
-  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
-)
 
 # Load your shapefile (replace with your path)
 med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
@@ -215,8 +217,6 @@ HW metrics where summerised for each regions of the Mediterranean sea, following
 # Results
 
 ## SST phenology
-
-### Maps
 
 ```{r SST phenology}
 #| cache: false
@@ -371,26 +371,6 @@ for (file in filelist$path) {
 cat("Global min SST:", global_min, "\n")
 cat("Global max SST:", global_max, "\n")
 
-
-region_col <- c(
-  # greens
-  "Levantine Sea" = "#008F1A",   # brighter pine-green
-  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
-  
-  # blues / teals / purples
-  "Alboran Sea"   = "#414E7C",   # richer slate-blue
-  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
-  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
-  
-  # yellows / ochres
-  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
-  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
-  
-  # reds / oranges / browns
-  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
-  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
-  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
-)
 # Load your shapefile (replace with your path)
 med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
   dplyr::filter(!str_detect(name, "Black"))
@@ -638,9 +618,6 @@ gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/Merged_198
 
 ```
 
-### Compare 1982-1991 to 2012-2024
-
-
 ```{r map building}
 #| cache: false
 #| echo: false
@@ -706,26 +683,6 @@ for (file in filelist$path) {
   global_max <- max(global_max, max(dt$diff, na.rm = TRUE))
 }
 
-
-region_col <- c(
-  # greens
-  "Levantine Sea" = "#008F1A",   # brighter pine-green
-  "Sea of Sicily" = "#6B9C3C",   # vivid olive-sage
-  
-  # blues / teals / purples
-  "Alboran Sea"   = "#414E7C",   # richer slate-blue
-  "Gulf of Lyon"  = "#266A78",   # clearer Mediterranean teal
-  "Adriatic sea"  = "#583C68",   # deeper indigo-violet
-  
-  # yellows / ochres
-  "Balearic Sea"  = "#A98C3D",   # crisp mustard-ochre
-  "Aegean Sea"    = "#D7A543",   # sun-baked golden-ochre
-  
-  # reds / oranges / browns
-  "Tyrrhenian Sea"= "#A02A2A",   # vivid brick-red
-  "Algerian Sea"  = "#DF5513",   # bright burnt-orange
-  "Ionian Sea"    = "#705943"    # warmer earthy-taupe
-)
 # Load your shapefile (replace with your path)
 med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
   dplyr::filter(!str_detect(name, "Black"))
@@ -878,6 +835,1145 @@ gifski::gifski(files, gif_file = "Outputs/SST/SST_Phenology/plots/gif/Difference
 
 ```
 
+```{r rasterizing}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(rnaturalearth)
+library(data.table)
+# Load your shapefile (replace with your path)
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black"))
+
+# Get world land polygons
+world <- ne_countries(scale = "large", returnclass = "sf")
+
+model_rast <- "Outputs/SST/nc/n_event_per_year/n_event_1982.nc" %>% 
+  rast()
+
+values(model_rast) <- NA
+names(model_rast)<- "val"
+
+filelist <- list.files("Outputs/SST/SST_Phenology/doy/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(file = gsub(".*/","",path),
+         doy = gsub("[^0-9]","",file) %>% 
+           as.numeric()) %>% 
+  arrange(doy)
+
+
+for (i in 215:max(filelist$doy)) {
+  
+  df_i <- fread(filelist$path[i]) %>% 
+    dplyr::filter(split != "all") %>% 
+    dplyr::select(-doy)
+
+  for (ii in unique(df_i$split)) {
+    
+    df_ii <- df_i %>% 
+      dplyr::filter(split == ii) %>% 
+      dplyr::select(-split)
+    
+    pts <- vect(df_ii, geom = c("x", "y"), crs = crs(model_rast))
+
+    rast_df <- terra::rasterize(
+      pts,             # what to burn
+      model_rast,         # target raster geometry
+      field = c("mean",   "median" ,"sd"   ,  "p05"   , "p25" ,   "p75"  ,  "p95"), # column to transfer
+      fun   = "mean"   # how to handle duplicate points (mean, max, sum, …)
+    )
+
+    names(rast_df) <- c("mean","median","sd","p05","p25","p75","p95")
+  
+    writeRaster(rast_df, paste0("Outputs/SST/SST_Phenology/Zonal_Statistics/rast/",ii,"/Rast_Pheno_",ii,"_DOY_",i,".tif"),overwrite = T)
+    }
+}
+
+```
+
+```{r Zonal Exctraction}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(sf)
+library(rnaturalearth)
+library(data.table)
+library(terra)
+library(progress)
+
+med_regions <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black")) %>% 
+  dplyr::select(-Id) %>% 
+  vect()
+
+med_regions_sf <- st_read("Data/mask_Med_Sea/More_regions_Med_Sea.shp") %>% 
+  dplyr::filter(!str_detect(name, "Black")) %>% 
+  dplyr::select(-c(Id)) %>% 
+  as_tibble() %>% 
+  dplyr::select(- geometry)
+
+if (!"poly_id" %in% names(med_regions)) med_regions$poly_id <- seq_len(nrow(med_regions))
+if (!"poly_id" %in% names(med_regions_sf)) med_regions_sf$poly_id <- seq_len(nrow(med_regions_sf))
+
+folderlist <- list.files("Outputs/SST/SST_Phenology/Zonal_Statistics/rast/", full.names = T) %>% 
+  as_tibble() %>% 
+  rename(path = "value") %>% 
+  mutate(split = gsub(".*/","",path))
+
+
+#––––– OUTER progress bar (splits) –––––#
+pb_split <- progress_bar$new(
+  total   = length(folderlist$split),
+  clear   = FALSE,
+  format  = "Split :current/:total [:bar] :percent  elapsed=:elapsed"
+)
+
+first <- TRUE   # flag to initialise df_out the first time
+
+for (split in folderlist$split) {
+  pb_split$tick()   # advance outer bar
+  
+  split_path <- file.path(
+    "Outputs", "SST", "SST_Phenology", "Zonal_Statistics", "rast", split
+  )
+  
+  filelist_split <- list.files(split_path, full.names = TRUE) %>% 
+    as_tibble() %>% 
+    rename(path = value) %>% 
+    mutate(
+      file = basename(path),
+      doy  = sub(".*_(\\d+)\\.tif$", "\\1", file) |> as.numeric()
+    ) %>% 
+    arrange(doy)
+  
+  #––––– INNER progress bar (doys within this split) –––––#
+  pb_doy <- progress_bar$new(
+    total  = nrow(filelist_split),
+    clear  = FALSE,
+    format = sprintf("  -> %s :current/:total [:bar] :percent  elapsed=:elapsed", split)
+  )
+  
+  for (i in seq_len(nrow(filelist_split))) {
+    pb_doy$tick()   # advance inner bar
+    
+    img <- rast(filelist_split$path[i])
+    doy <- filelist_split$doy[i]
+    
+    m <- terra::extract(
+           img, med_regions,
+           fun = mean, na.rm = TRUE
+         )
+    
+    p_means <- cbind(
+                 med_regions_sf,
+                 m[match(med_regions_sf$poly_id, m$ID), -1]
+               ) %>% 
+               mutate(doy = doy,
+                      split = split) %>% 
+               select(-poly_id)
+    
+    if (first) {
+      df_out <- p_means
+      first  <- FALSE
+    } else {
+      df_out <- bind_rows(df_out, p_means)
+    }
+  }
+  pb_doy$terminate()  # finish inner bar for this split
+}
+pb_split$terminate() 
+
+fwrite(df_out,"Outputs/SST/SST_Phenology/Zonal_Statistics/zonal_stats_DOY_decades.csv")
+```
+
+```{r plotting phenology}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(ggplot2)
+library(dplyr)
+library(scico) 
+
+df <- fread("Outputs/SST/SST_Phenology/Zonal_Statistics/zonal_stats_DOY_decades.csv") %>% 
+  as_tibble()
+
+
+df %>% 
+  ggplot(aes(x = doy, y = mean, color = split, fill = split)) +
+  geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd), 
+              alpha = 0.15, color = NA) +
+  geom_smooth(method = "gam", se = FALSE, linewidth = 1) +
+  geom_point(alpha = 0.1, size = 0.5) +
+  facet_wrap(~name, scales = "free_y") +
+  scale_color_scico_d(palette = "batlow") +
+  scale_fill_scico_d(palette = "batlow") +
+  labs(
+    x = "Day of Year",
+    y = "Mean SST (°C)",
+    color = "Period",
+    fill = "Period",
+    title = "Seasonal SST Trends with Variability Bands"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold", size = 12),
+    legend.position = "top",
+    legend.title = element_text(size = 12)
+  )
+
+df %>%
+  ggplot(aes(x = doy, y = mean, color = split)) +
+  geom_smooth(method = "gam", se = FALSE, linewidth = 1.2) +
+  facet_wrap(~name) +
+  scale_color_scico_d(palette = "batlow") +
+  labs(
+    x = "Day of Year",
+    y = "Mean SST (°C)",
+    color = "Period",
+    title = "Smoothed Seasonal SST Trends by Region"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    strip.text = element_text(face = "bold"),
+    legend.position = "top"
+  )
+
+```
+
+```{r Extracting Raw values}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(terra)
+library(dplyr)
+library(purrr)
+library(progress)
+
+# Load regions
+med_regions <- sf::read_sf("Data/mask_Med_Sea/More_regions_Med_Sea.shp")
+med_regions$region_ID <- 1:nrow(med_regions)
+
+# List all .nc files and extract date
+nc_files <- list.files("Data/SST", pattern = "\\.nc$", full.names = TRUE, recursive = TRUE) %>% 
+  tibble(path = .) %>%
+  mutate(file = basename(path),
+         date = substr(file, 1, 8))  # adapt if date format is different
+
+# Initialize list to store results
+results_list <- vector("list", length = nrow(nc_files))
+
+# Create progress bar
+pb <- progress_bar$new(
+  total = nrow(nc_files),
+  format = "[:bar] :percent | :current/:total files | ETA: :eta",
+  clear = FALSE,
+  width = 60
+)
+
+# Loop efficiently
+for (i in seq_len(nrow(nc_files))) {
+  pb$tick()
+
+  # Load raster
+  sst <- rast(nc_files$path[i], subds = 1)
+
+  # Extract SST values by region
+  extracted <- terra::extract(sst, med_regions)
+
+  # Calculate statistics
+  stats <- extracted %>%
+    rename(value = 2, region_ID = ID) %>%
+    group_by(region_ID) %>%
+    summarise(
+      mean   = mean(value, na.rm = TRUE),
+      median = median(value, na.rm = TRUE),
+      sd     = sd(value, na.rm = TRUE),
+      p10    = quantile(value, 0.10, na.rm = TRUE),
+      p25    = quantile(value, 0.25, na.rm = TRUE),
+      p75    = quantile(value, 0.75, na.rm = TRUE),
+      p90    = quantile(value, 0.90, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(date = nc_files$date[i])
+
+  results_list[[i]] <- stats
+
+  rm(sst, extracted, stats)
+  gc()  # clean memory
+}
+
+# Combine all results
+df_out <- bind_rows(results_list)
+
+# Optional: Add region names
+region_info <- as.data.frame(med_regions)[, c("region_ID", "name")]
+final_df <- left_join(df_out, region_info, by = "region_ID")
+
+# ---- Save results ----
+write.csv(final_df, "Outputs/SST/region_stats.csv", row.names = F)
+
+
+```
+
+```{r Compare extraction chouchou}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(lubridate)
+library(zoo)
+library(trend) 
+library(tidyverse)
+library(data.table)
+
+df_simon <- fread("Outputs/SST/region_stats.csv") %>% 
+  mutate(date = as.character(date) %>% as.Date(format = "%Y%m%d"),
+         mean = mean - 273.15,
+         median = median - 273.15,
+         p10 = p10 - 273.15,
+         p25 = p25 - 273.15,
+         p75 = p75 - 273.15,
+         p90 = p90 - 273.15) %>%
+  as_tibble() %>% 
+  rename(region = "name") %>% 
+  pivot_longer(-c(region_ID,date,region), names_to = "metric", values_to = "value") %>% 
+  mutate(region_ID = as.character(region_ID)) %>% 
+  rename(value_simon = value)
+
+
+regionID <- df_simon %>% 
+  group_by(region_ID) %>% 
+  reframe(region = unique(region))
+
+path_file_chouchou <- rstudioapi::selectFile()
+
+df_chouchou <-fread(path_file_chouchou) %>% 
+  as_tibble()%>%
+  pivot_longer(
+    cols       = -Date,
+    names_to   = c("metric", "region_ID"),
+    names_pattern = "(.*)_region_(\\d+)",
+    values_to  = "value"
+  ) %>% 
+  rename(date = "Date") %>% 
+  left_join(regionID, by = "region_ID") %>% 
+  mutate(date = as.character(date) %>% as.Date(format = "%Y%m%d"),
+         metric = tolower(metric),
+         metric = case_when(metric == "std" ~ "sd",
+                            T ~ metric)) %>% 
+  rename(value_chouchou = value)
+
+df_both <- df_simon %>% 
+  left_join(df_chouchou, by = c("date","metric","region_ID","region")) %>% 
+  mutate(difference = (value_chouchou - value_simon) / value_simon * 100)
+
+
+compare <- df_both %>% 
+  group_by(region,metric) %>% 
+  reframe(avg = mean(difference))
+
+
+fwrite(df_both,paste0(rstudioapi::selectDirectory(),"/compare_extraction.csv"))
+
+
+```
+
+```{r TS metrics}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: true
+
+library(lubridate)
+library(zoo)
+library(trend) 
+library(tidyverse)
+library(data.table)
+library(heatwaveR)
+
+df <- fread("../Outputs/SST/region_stats.csv") %>% 
+  mutate(date = as.character(date) %>% as.Date(format = "%Y%m%d"),
+         mean = mean - 273.15) %>% 
+  dplyr::select(date,region = "name",SST = "mean")
+
+# Your input df must have columns:
+#   date   (Date), region (chr/fct), SST (numeric)
+
+# ── 1. Add year & day-of-year ──────────────────────────────────────────────
+df2 <- df %>%
+  mutate(
+    year = year(date),
+    yday = yday(date)
+  )
+
+# ── 2. Build climatology baseline (exclude most recent year) ───────────────
+baseline <- df2 %>%
+  filter(year <= max(year) - 1)
+
+# ── 3. Compute region-specific warm-season threshold ───────────────────────
+#     here using the 75th percentile of baseline SST per region
+region_thresh <- baseline %>%
+  group_by(region) %>%
+  summarise(
+    warm_thresh = quantile(SST, probs = 0.75, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+# ── 4. Join threshold back onto full data & compute anomalies ──────────────
+df3 <- df2 %>%
+  left_join(region_thresh, by = "region") %>%
+  group_by(region, yday) %>%
+  mutate(
+    clim_mean = mean(SST[year <= max(year)-1], na.rm = TRUE),
+    anomaly   = SST - clim_mean
+  ) %>%
+  ungroup()
+
+# Inspect
+# head(df3)
+
+# ── 5. Threshold-based dates using region-specific warm_thresh ────────────
+threshold_metrics <- df3 %>%
+  group_by(region, year) %>%
+  summarise(
+    warm_onset = {
+      r <- SST > warm_thresh
+      dd <- rle(r)
+      ends  <- cumsum(dd$lengths)
+      starts<- ends - dd$lengths + 1
+      idx   <- which(dd$values & dd$lengths >= 5)
+      if(length(idx)) date[starts[idx[1]]] else as.Date(NA)
+    },
+    warm_end = {
+      sel <- month(date) %in% 9:11
+      r   <- sel & (SST < warm_thresh)
+      dd  <- rle(r)
+      ends  <- cumsum(dd$lengths)
+      starts<- ends - dd$lengths + 1
+      idx   <- which(dd$values & dd$lengths >= 5)
+      if(length(idx)) date[starts[idx[1]]] else as.Date(NA)
+    },
+    .groups = "drop"
+  )
+
+
+# ── 6. Cumulative-heat metrics (optional: can also use warm_thresh per region) ─
+cumulative_metrics <- df3 %>%
+  group_by(region, year) %>%
+  summarise(
+    DHD = sum(pmax(0, SST - warm_thresh), na.rm = TRUE),
+    DHW = DHD / 7,
+    .groups = "drop"
+  )
+
+
+# ── 7. Marine heatwave metrics ─────────────────────────────────────────────
+# ── 6a. Compute each region’s baseline period ───────────────────────────────
+region_clim <- df3 %>%
+  group_by(region) %>%
+  summarize(
+    # use all but the last year as “baseline”
+    clim_start = min(date[year <= max(year) - 1]),
+    clim_end   = max(date[year <= max(year) - 1]),
+    .groups = "drop"
+  )
+
+# Inspect:
+# region_clim
+
+# ── 6b. Detect marine heatwaves over the full time‐series per region ────────
+events_by_region <- df3 %>%
+  group_by(region) %>%
+  do({
+    d <- .
+    # 1) full SST time‐series for this region
+    ts_all <- tibble(t = d$date, temp = d$SST)
+    # 2) pick up the matching baseline window
+    bc <- region_clim %>% filter(region == d$region[1])
+    # 3) build climatology & detect events
+    cm <- ts2clm(ts_all, climatologyPeriod = c(bc$clim_start, bc$clim_end))
+    ev <- detect_event(cm)$event
+    if (nrow(ev) == 0) {
+      # return empty tibble so we can right_join later
+      tibble()
+    } else {
+      # tag each event with the calendar year it started
+      ev %>% mutate(year = year(date_start))
+    }
+  }) %>%
+  ungroup()
+
+# Inspect:
+# head(events_by_region)
+
+# ── 6c. Summarize events by region & year ──────────────────────────────────
+heatwave_metrics <- events_by_region %>%
+  group_by(region, year) %>%
+  summarize(
+    mhw_count    = n(),
+    mhw_mean_dur = mean(duration,        na.rm = TRUE),
+    mhw_max_dur  = max(duration,         na.rm = TRUE),
+    mhw_mean_int = mean(intensity_max,   na.rm = TRUE),
+    mhw_max_int  = max(intensity_max,    na.rm = TRUE),
+    mhw_cum_int  = sum(intensity_cumulative,     na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  # make sure years with zero events still appear
+  right_join(
+    df3 %>% distinct(region, year),
+    by = c("region", "year")
+  ) %>%
+  replace_na(list(
+    mhw_count = 0,
+    mhw_mean_dur = NA, mhw_max_dur = NA,
+    mhw_mean_int = NA, mhw_max_int = NA,
+    mhw_cum_int = 0
+  ))
+
+
+
+# ── 8. Seasonal-cycle stats ────────────────────────────────────────────────
+seasonal_metrics <- df3 %>%
+  group_by(region, year) %>%
+  summarise(
+    date_max     = date[which.max(SST)],
+    date_min     = date[which.min(SST)],
+    amplitude    = max(SST) - min(SST),
+    warming_rate = {
+      sel <- month(date) %in% 3:5
+      if(sum(sel) > 2) coef(lm(SST[sel] ~ yday[sel]))[2] else NA
+    },
+    cooling_rate = {
+      sel <- month(date) %in% 9:11
+      if(sum(sel) > 2) coef(lm(SST[sel] ~ yday[sel]))[2] else NA
+    },
+    .groups = "drop"
+  )
+
+
+```
+
+```{r Plotting time series}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: true
+
+df_timeserie <- fread("../Outputs/SST/region_stats.csv") %>% 
+  mutate(date = as.character(date) %>% as.Date(format = "%Y%m%d"),
+         mean = mean - 273.15,
+         median = median - 273.15,
+         p10 = p10 - 273.15,
+         p25 = p25 - 273.15,
+         p75 = p75 - 273.15,
+         p90 = p90 - 273.15) %>%
+  as_tibble() %>% 
+  mutate(doy = yday(date),
+         year = year(date))
+
+
+df_minmax <- df_timeserie %>% 
+  group_by(name,year) %>% 
+  reframe(min = min(mean),
+          max = max(mean)) %>% 
+  group_by(name) %>% 
+  reframe(max = lm(max~year)$coefficients[[2]],
+          min = lm(min~year)$coefficients[[2]])
+
+# compute breaks every 15 days (1, 16, 31, … up to 361)
+doy_breaks_15 <- seq(1, 366, by = 60)
+
+# generate labels like “Jan 01”, “Jan 16”, …
+doy_labels_15 <-  lubridate::month(as.Date(doy_breaks_15 - 1, origin = as.Date("2001-01-01")), label = TRUE, locale = "UTC") %>% 
+  as.character()
+
+plot_timeserie <- df_timeserie %>%
+  # filter(name == "Adriatic sea") %>%
+  ggplot(aes(x = doy, y = mean, color = year, group = year)) +
+  
+  # points
+  geom_point(alpha = 0.05, size = 1.5) +
+  
+  # smooth GAM curves
+  geom_smooth(method = "gam", se = FALSE, alpha= 0.5, size = 0.5) +
+  
+  # facets
+  facet_wrap(~ name, ncol = 4) +
+    
+    scale_x_continuous(breaks = doy_breaks_15,
+                       labels = doy_labels_15)+
+    # make the colorbar wide and move its title on top
+  guides(
+    color = guide_colorbar(
+      title.position = "top",
+      title.hjust    = 0.5,
+      barwidth       = unit(8, "cm"),
+      barheight      = unit(0.4, "cm")
+    )
+  ) +
+  
+  # darkblue → darkred gradient
+  scale_color_gradient2(
+    name = "Year",
+    low  = "darkblue",
+    mid = "white",
+    high = "darkred",
+    midpoint = mean(c(2024,1982)),
+  ) +
+  
+  # labels
+  labs(
+    x        = "Day of Year",
+    y        = "Average SST (°C)",
+  ) +
+  
+  theme_minimal(base_size = 14) +
+  theme(
+    strip.background      = element_rect(fill = "gray90", color = NA),
+    strip.text            = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45),
+    
+    # legend at bottom, horizontal
+    legend.position       = c(0.8,0.1),
+    legend.direction      = "horizontal",
+    legend.box            = "horizontal",
+    
+    # a little breathing room below panels
+    plot.margin           = margin(t = 5, r = 5, b = 30, l = 5),
+    
+    # grid tweaks
+    panel.grid.major      = element_line(color = "gray85"),
+    panel.grid.minor      = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+# ggsave("Manuscript/Figs/plot_time_serie.png",plot_timeserie, dpi = 300)
+```
+
+Yearly SST time series for each of the 10 Mediterranean sub-regions are presented in @fig-MapMedSea_timeseries. Across all regions, periods of minimum and maximum temperatures occur synchronously, with minima in February–March and maxima in July–August. Overall, every sub-region exhibits higher SST values in 2024 compared to 1982. The most significant increase in summer temperature maxima is observed in `r df_minmax %>% dplyr::filter(max == max(max)) %>% pull(name)`, with a warming rate of `r round(df_minmax %>% dplyr::filter(max == max(max)) %>% pull(max)*10,2)` °C per decade. Similarly, the most substantial increase in winter temperature minima occurs in `r df_minmax %>% dplyr::filter(min == max(min)) %>% pull(name)` showing a warming rate of `r round(df_minmax %>% dplyr::filter(min == max(min)) %>% pull(min)*10,2)` °C per decade.  
+
+```{r Display Time series}
+#| cache: false
+#| echo: false
+#| warning: false
+#| fig-cap: "Seasonal cycle of average sea surface temperature (°C) for ten Mediterranean sub-regions. In each panel, semi-transparent points are daily SST average of the region and solid lines are GAM smooths of SST against day-of-year."
+#| label: fig-MapMedSea_timeseries
+#| out-width: "100%"
+
+knitr::include_graphics("Figs/plot_time_serie.png")
+```
+
+```{r plotting date of min and max}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: true
+
+library(patchwork)
+
+df_date_extrem <- df3 %>%
+  group_by(region, year) %>%
+  summarise(
+    doy_min_sst = yday[which.min(SST)],
+    min_sst     = min(SST),
+    doy_max_sst = yday[which.max(SST)],
+    max_sst     = max(SST),
+    .groups     = "drop"
+  )
+ 
+
+df_lm_extrem <- df_date_extrem %>% 
+  dplyr::filter(doy_min_sst < 120) %>% 
+  group_by(region) %>% 
+  reframe(doy_min = lm(doy_min_sst ~ year)$coefficients[[2]],
+          doy_max = lm(doy_max_sst ~ year)$coefficients[[2]])
+
+
+# compute breaks every 15 days (1, 16, 31, … up to 361)
+doy_breaks_15 <- seq(1, 366, by = 30)
+
+# generate labels like “Jan 01”, “Jan 16”, …
+doy_labels_15 <-  lubridate::month(as.Date(doy_breaks_15 - 1, origin = as.Date("2001-01-01")), label = TRUE, locale = "UTC") %>% 
+  as.character()
+
+min <- df_date_extrem %>% 
+  ggplot(aes(x = year, y = doy_min_sst, color = region))+
+  geom_point(alpha = 0.1, show.legend = F)+
+  geom_smooth(method = "lm", alpha = 0.1, show.legend = F)+
+  scale_color_manual(values = region_col)+
+  ylim(0,120) +
+  
+  # labels
+  labs(
+    x        = "Year",
+    y        = "Day of the year the minimum SST",
+  ) +
+  
+  theme_minimal(base_size = 14) +
+    
+    scale_y_continuous(breaks = doy_breaks_15,
+                       labels = doy_labels_15,
+                       limits = c(0,120)) +
+  theme(
+    strip.background      = element_rect(fill = "gray90", color = NA),
+    strip.text            = element_text(face = "bold"),
+    
+    # a little breathing room below panels
+    # plot.margin           = margin(t = 5, r = 5, b = 30, l = 5),
+    
+    # grid tweaks
+    panel.grid.major      = element_line(color = "gray85"),
+    panel.grid.minor      = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+max <- df3 %>%
+  group_by(region, year) %>%
+  summarise(
+    doy_min_sst = yday[which.min(SST)],
+    min_sst     = min(SST),
+    doy_max_sst = yday[which.max(SST)],
+    max_sst     = max(SST),
+    .groups     = "drop"
+  ) %>% 
+  ggplot(aes(x = year, y = doy_max_sst, color = region))+
+  geom_point(alpha = 0.1 )+
+  geom_smooth(method = "lm", alpha = 0.1)+
+  scale_color_manual(values = region_col)+
+  
+  # labels
+  labs(
+    x        = "Year",
+    y        = "Day of the year the maximum SST",
+  ) +
+  
+  theme_minimal(base_size = 14) +
+    
+    scale_y_continuous(breaks = doy_breaks_15,
+                       labels = doy_labels_15) +
+  theme(
+    strip.background      = element_rect(fill = "gray90", color = NA),
+    strip.text            = element_text(face = "bold"),
+    
+    
+    # a little breathing room below panels
+    # plot.margin           = margin(t = 5, r = 5, b = 30, l = 5),
+    
+    # grid tweaks
+    panel.grid.major      = element_line(color = "gray85"),
+    panel.grid.minor      = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+min_max <- min + max & plot_layout(guide = "collect")&     # collect all legends
+  theme(legend.position = "bottom",               # put legend at bottom
+        legend.direction = "horizontal") 
+
+# ggsave("Manuscript/Figs/plot_min_max_SST.png",min_max, dpi = 300)
+
+```
+
+Dates on which SST minima and maxima occur remain generally consistent over the study period for most regions (@fig-Med_minmax). However, shifts are observed in some areas: the winter temperature minimum in `r df_lm_extrem %>% dplyr::filter(doy_min == min(doy_min)) %>% pull(region)` occurs progressively earlier by `r abs(round(df_lm_extrem %>% dplyr::filter(doy_min == min(doy_min)) %>% pull(doy_min) * 10,2))` days per decade, while in `r df_lm_extrem %>% dplyr::filter(doy_min == max(doy_min)) %>% pull(region)` it occurs progressively later by `r abs(round(df_lm_extrem %>% dplyr::filter(doy_min == max(doy_min)) %>% pull(doy_min) * 10,2))` days later per decade. Regarding the timing of maximum SST, two regions stand out: `r df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region)` and `r df_lm_extrem %>% dplyr::filter(region != df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region))%>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region) ` both show an earlier occurrence of their annual temperature maxima by  `r abs(round(df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(doy_max)*10,2))` and `r abs(round(df_lm_extrem %>% dplyr::filter(region != df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region))%>% dplyr::filter(doy_max == min(doy_max)) %>% pull(doy_max)*10,2))` days per decade, respectively. 
+
+```{r Display date of min and max}
+#| cache: false
+#| echo: false
+#| warning: false
+#| fig-cap: "Trends in the timing of annual minimum (left panel) and maximum (right panel) Sea Surface Temperature (SST) across ten Mediterranean sub-regions from 1982 to 2024. Linear regression lines and 95% confidence intervals illustrate the shifts in timing (day of the year), highlighting regions with earlier or later occurrences of annual temperature extremes over the studied period."
+#| label: fig-Med_minmax
+#| out-width: "100%"
+
+knitr::include_graphics("Figs/plot_min_max_SST.png")
+```
+
+```{r Warmth-onset and offset}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+
+library(lubridate)
+library(zoo)
+library(trend) 
+library(tidyverse)
+library(data.table)
+library(heatwaveR)
+
+
+
+df <- fread("Outputs/SST/region_stats.csv") %>% 
+  mutate(date = as.character(date) %>% as.Date(format = "%Y%m%d"),
+         mean = mean - 273.15) %>% 
+  dplyr::select(date,region = "name",SST = "mean")
+
+# Your input df must have columns:
+#   date   (Date), region (chr/fct), SST (numeric)
+
+# ── 1. Add year & day-of-year ──────────────────────────────────────────────
+df2 <- df %>%
+  mutate(
+    year = year(date),
+    yday = yday(date)
+  )
+
+# ── 2. Build climatology baseline (exclude most recent year) ───────────────
+baseline <- df2 %>%
+  filter(year <= max(year) - 1)
+
+# ── 3. Compute region-specific warm-season threshold ───────────────────────
+#     here using the 75th percentile of baseline SST per region
+region_thresh <- baseline %>%
+  group_by(region) %>%
+  summarise(
+    warm_thresh = quantile(SST, probs = 0.75, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+# ── 4. Join threshold back onto full data & compute anomalies ──────────────
+df3 <- df2 %>%
+  left_join(region_thresh, by = "region") %>%
+  group_by(region, yday) %>%
+  mutate(
+    clim_mean = mean(SST[year <= max(year)-1], na.rm = TRUE),
+    anomaly   = SST - clim_mean
+  ) %>%
+  ungroup()
+
+# Inspect
+# head(df3)
+
+# ── 5. Threshold-based dates using region-specific warm_thresh ────────────
+threshold_metrics <- df3 %>%
+  group_by(region, year) %>%
+  summarise(
+    warm_onset = {
+      r <- SST > warm_thresh
+      dd <- rle(r)
+      ends  <- cumsum(dd$lengths)
+      starts<- ends - dd$lengths + 1
+      idx   <- which(dd$values & dd$lengths >= 5)
+      if(length(idx)) date[starts[idx[1]]] else as.Date(NA)
+    },
+    warm_end = {
+      sel <- month(date) %in% 9:11
+      r   <- sel & (SST < warm_thresh)
+      dd  <- rle(r)
+      ends  <- cumsum(dd$lengths)
+      starts<- ends - dd$lengths + 1
+      idx   <- which(dd$values & dd$lengths >= 5)
+      if(length(idx)) date[starts[idx[1]]] else as.Date(NA)
+    },
+    .groups = "drop"
+  )
+
+
+lm_df <- threshold_metrics %>% 
+  mutate(doy_onset = yday(warm_onset),
+         doy_offset = yday(warm_end)) %>% 
+  group_by(region) %>% 
+  reframe(rate_onset = lm(doy_onset ~ year)$coefficients[[2]],
+          rate_end = lm(doy_offset ~ year)$coefficients[[2]])
+
+
+
+
+# compute breaks every 15 days (1, 16, 31, … up to 361)
+doy_breaks_15 <- seq(1, 366, by = 15)
+
+# generate labels like “Jan 01”, “Jan 16”, …
+doy_labels_15 <- format(
+  as.Date(doy_breaks_15 - 1, origin = as.Date("2001-01-01")),
+  "%b %d"
+)
+
+
+(plot_doy_warm_start <- threshold_metrics %>%
+  mutate(
+    doy_onset  = yday(warm_onset),
+    doy_offset = yday(warm_end),
+    duration = doy_offset - doy_onset
+  ) %>%
+  select(-warm_onset, -warm_end) %>%
+  pivot_longer(-c(region, year), names_to = "metric", values_to = "value") %>%
+  mutate(metric = factor(metric, levels = c("doy_onset","doy_offset", "duration"),
+                         labels = c("Warm Onset","Warm End","Duration"))) %>%
+  dplyr::filter(metric == "Warm Onset") %>% 
+  ggplot(aes(year, value, color = region)) +
+  
+    geom_point(alpha = 0.15, size = 1.5) +
+    geom_smooth(method = "glm", se = TRUE, size = 0.8, alpha = 0.1) +
+    
+    facet_wrap(~ metric, ncol = 3, scales = "free_y") +
+    
+    scale_y_continuous(breaks = doy_breaks_15,
+                       labels = doy_labels_15) +
+    
+    scale_color_manual(values = region_col, name = "Region") +
+    
+    # here’s the magic for label/key positions
+    guides(color = guide_legend(
+      direction      = "vertical",
+      label.position = "left",   # move text left of the key
+      key.position   = "right",  # move key to the right of the text
+      label.hjust     = 0,       # left-align the text
+      keywidth        = unit(1.2, "lines")
+    )) +
+    
+    labs(x = "Year", y = "Day of Year") +
+    
+    theme_minimal(base_family = "Helvetica") +
+    theme(
+      # place the whole legend inside the plot:
+      legend.position      = c(0.5, 0.98),
+      legend.justification = c(0, 1),
+      
+      # semi-transparent background so it sits atop your points
+      legend.background    = element_rect(fill = alpha("white", 0.6), color = NA),
+      
+      # strip out the old bottom legend settings:
+      legend.direction     = NULL,
+      legend.key.size      = unit(0.8, "lines"),
+      legend.title         = element_text(size = 11, face = "bold"),
+      legend.text          = element_text(size = 9),
+      
+      axis.title           = element_text(size = 12, face = "bold"),
+      axis.text            = element_text(size = 10, color = "gray30"),
+      strip.text           = element_text(size = 13, face = "bold"),
+      panel.grid.major     = element_line(color = "gray90"),
+      panel.grid.minor     = element_blank(),
+      plot.background = element_rect(fill = "white",color = NA)
+    )
+)
+
+(plot_doy_warm_end <- threshold_metrics %>%
+  mutate(
+    doy_onset  = yday(warm_onset),
+    doy_offset = yday(warm_end),
+    duration = doy_offset - doy_onset
+  ) %>%
+  select(-warm_onset, -warm_end) %>%
+  pivot_longer(-c(region, year), names_to = "metric", values_to = "value") %>%
+  mutate(metric = factor(metric, levels = c("doy_onset","doy_offset", "duration"),
+                         labels = c("Warm Onset","Warm End","Duration"))) %>%
+  dplyr::filter(metric == "Warm End") %>% 
+  ggplot(aes(year, value, color = region)) +
+  
+    geom_point(alpha = 0.15, size = 1.5, show.legend = F) +
+    geom_smooth(method = "glm", se = TRUE, size = 0.8, show.legend = F, alpha = 0.1) +
+    
+    facet_wrap(~ metric, ncol = 3, scales = "free_y") +
+    
+    scale_y_continuous(breaks = doy_breaks_15,
+                       labels = doy_labels_15) +
+    
+    scale_color_manual(values = region_col, name = "Region") +
+    
+    # here’s the magic for label/key positions
+    guides(color = guide_legend(
+      direction      = "vertical",
+      label.position = "left",   # move text left of the key
+      key.position   = "right",  # move key to the right of the text
+      label.hjust     = 0,       # left-align the text
+      keywidth        = unit(1.2, "lines")
+    )) +
+    
+    labs(x = "Year", y = "Day of Year") +
+    
+    theme_minimal(base_family = "Helvetica") +
+    theme(
+      # place the whole legend inside the plot:
+      # legend.position      = c(0.3, 0.98),
+      legend.justification = c(0, 1),
+      
+      # semi-transparent background so it sits atop your points
+      legend.background    = element_rect(fill = alpha("white", 0.6), color = NA),
+      
+      # strip out the old bottom legend settings:
+      legend.direction     = NULL,
+      legend.key.size      = unit(0.8, "lines"),
+      legend.title         = element_text(size = 11, face = "bold"),
+      legend.text          = element_text(size = 9),
+      
+      axis.title           = element_text(size = 12, face = "bold"),
+      axis.text            = element_text(size = 10, color = "gray30"),
+      strip.text           = element_text(size = 13, face = "bold"),
+      panel.grid.major     = element_line(color = "gray90"),
+      panel.grid.minor     = element_blank(),
+      plot.background = element_rect(fill = "white",color = NA)
+    )
+)
+
+(plot_doy_warm_duration <- threshold_metrics %>%
+  mutate(
+    doy_onset  = yday(warm_onset),
+    doy_offset = yday(warm_end),
+    duration = doy_offset - doy_onset
+  ) %>%
+  select(-warm_onset, -warm_end) %>%
+  pivot_longer(-c(region, year), names_to = "metric", values_to = "value") %>%
+  mutate(metric = factor(metric, levels = c("doy_onset","doy_offset", "duration"),
+                         labels = c("Warm Onset","Warm End","Duration of warm period"))) %>%
+  dplyr::filter(metric == "Duration of warm period") %>% 
+  ggplot(aes(year, value, color = region)) +
+  
+    geom_point(alpha = 0.15, size = 1.5, show.legend = F) +
+    geom_smooth(method = "glm", se = TRUE, size = 0.8, show.legend = F, alpha = 0.1) +
+    
+    facet_wrap(~ metric, ncol = 3, scales = "free_y") +
+    
+    scale_color_manual(values = region_col, name = "Region") +
+    
+    # here’s the magic for label/key positions
+    guides(color = guide_legend(
+      direction      = "vertical",
+      label.position = "left",   # move text left of the key
+      key.position   = "right",  # move key to the right of the text
+      label.hjust     = 0,       # left-align the text
+      keywidth        = unit(1.2, "lines")
+    )) +
+    
+    labs(x = "Year", y = "Number of Days") +
+    
+    theme_minimal(base_family = "Helvetica") +
+    theme(
+      # place the whole legend inside the plot:
+      # legend.position      = c(0.3, 0.98),
+      legend.justification = c(0, 1),
+      
+      # semi-transparent background so it sits atop your points
+      legend.background    = element_rect(fill = alpha("white", 0.6), color = NA),
+      
+      # strip out the old bottom legend settings:
+      legend.direction     = NULL,
+      legend.key.size      = unit(0.8, "lines"),
+      legend.title         = element_text(size = 11, face = "bold"),
+      legend.text          = element_text(size = 9),
+      
+      axis.title           = element_text(size = 12, face = "bold"),
+      axis.text            = element_text(size = 10, color = "gray30"),
+      strip.text           = element_text(size = 13, face = "bold"),
+      panel.grid.major     = element_line(color = "gray90"),
+      panel.grid.minor     = element_blank(),
+      plot.background = element_rect(fill = "white",color = NA)
+    )
+)
+
+plot_doy_warm_merged <- (plot_doy_warm_start + plot_doy_warm_end) + plot_doy_warm_duration
+ggsave("Manuscript/Figs/plot_warm_season.png",plot_doy_warm_merged, dpi = 300)
+
+```
+
+```{r Display Warmth-onset and offset}
+#| cache: false
+#| echo: false
+#| warning: false
+#| fig-cap: "Trends in the timing  and duration of the warm season across ten Mediterranean sub-regions. Left panel (“Warm Onset”) shows the day of year when SST exceeds the p75 of temperature for more than 5 concecutive days, each year; central panel (“Warm End”) shows the day of year when SST falls bellow the p75 for more than 5 concecutive days; right panel (Duration of warm period) shows the amount of days between the start and the end of the warm season. Semi-transparent points are the annual onset/end dates for each region, and colored lines are per-region linear fits with 95% confidence bands. Downward slopes on the left indicate progressively earlier warm‐season starts, while upward slopes on the right indicate progressively later warm‐season terminations."
+#| label: fig-Med_warm_metrics
+#| out-width: "100%"
+
+knitr::include_graphics("Figs/plot_warm_season.png")
+```
+
+```{r Amplitude}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(lubridate)
+library(zoo)
+library(trend) 
+library(tidyverse)
+library(data.table)
+library(heatwaveR)
+
+# ── 8. Seasonal-cycle stats ────────────────────────────────────────────────
+seasonal_metrics <- df3 %>%
+  group_by(region, year) %>%
+  summarise(
+    date_max     = date[which.max(SST)],
+    date_min     = date[which.min(SST)],
+    amplitude    = max(SST) - min(SST),
+    warming_rate = {
+      sel <- month(date) %in% 3:5
+      if(sum(sel) > 2) coef(lm(SST[sel] ~ yday[sel]))[2] else NA
+    },
+    cooling_rate = {
+      sel <- month(date) %in% 9:11
+      if(sum(sel) > 2) coef(lm(SST[sel] ~ yday[sel]))[2] else NA
+    },
+    .groups = "drop"
+  )
+
+
+lm_df_amp <- seasonal_metrics  %>% 
+  group_by(region) %>% 
+  reframe(rate_amplitude = lm(amplitude ~ year)$coefficients[[2]])
+
+
+
+plot_amplitude <- seasonal_metrics %>% 
+  ggplot(aes(x = year, y = amplitude, color = region))+
+  geom_point(alpha = 0.3)+
+  geom_smooth(method = "lm",se = T, alpha = 0.1)+
+  scale_color_manual(values = region_col, name = "Region")+
+    
+    labs(x = "Year", y = "Thermal amplitude (°C)") +
+    
+    theme_minimal(base_family = "Helvetica") +
+    theme(
+      # place the whole legend inside the plot:
+      # legend.position      = c(0.3, 0.98),
+      legend.justification = c(0, 1),
+      
+      # semi-transparent background so it sits atop your points
+      legend.background    = element_rect(fill = alpha("white", 0.6), color = NA),
+      
+      # strip out the old bottom legend settings:
+      legend.direction     = NULL,
+      legend.key.size      = unit(0.8, "lines"),
+      legend.title         = element_text(size = 11, face = "bold"),
+      legend.text          = element_text(size = 9),
+      legend.position = "bottom",
+      
+      axis.title           = element_text(size = 12, face = "bold"),
+      axis.text            = element_text(size = 10, color = "gray30"),
+      strip.text           = element_text(size = 13, face = "bold"),
+      panel.grid.major     = element_line(color = "gray90"),
+      panel.grid.minor     = element_blank(),
+      plot.background = element_rect(fill = "white",color = NA)
+    )
+
+ggsave("Manuscript/Figs/plot_amplitude.png",plot_amplitude, dpi = 300)
+
+```
+
+```{r Display amplitude}
+#| cache: false
+#| echo: false
+#| warning: false
+#| fig-cap: "Trends in the timing  and duration of the warm season across ten Mediterranean sub-regions. Left panel (“Warm Onset”) shows the day of year when SST exceeds the p75 of temperature for more than 5 concecutive days, each year; central panel (“Warm End”) shows the day of year when SST falls bellow the p75 for more than 5 concecutive days; right panel (Duration of warm period) shows the amount of days between the start and the end of the warm season. Semi-transparent points are the annual onset/end dates for each region, and colored lines are per-region linear fits with 95% confidence bands. Downward slopes on the left indicate progressively earlier warm‐season starts, while upward slopes on the right indicate progressively later warm‐season terminations."
+#| label: fig-Med_amplitude
+#| out-width: "100%"
+
+knitr::include_graphics("Figs/plot_amplitude.png")
+```
+
 
 ## Heatwaves
 ### Number of Event per year
@@ -1000,6 +2096,7 @@ med_regions <- st_transform(med_regions, crs(stk))
 # med_regions <- st_zm(med_regions)
 
 zone_rast <- terra::rasterize(med_regions, stk[[1]], field = 1:nrow(med_regions))
+writeRaster(zone_rast, "Data/mask_Med_Sea/region_of_the_med.tif")
 plot(zone_rast)
 # Function that terra::zonal will apply: returns a 3-element vector
 qfun <- function(values, ...) {

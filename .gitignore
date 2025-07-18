@@ -9,5 +9,6 @@ Outputs/SST/Cropped_CSV/*
 Outputs/SST/HW_detection/*
 Outputs/SST/IAD/*
 Outputs/SST/SST_Phenology/*
+!Outputs/SST/SST_Phenology/Zonal_Statistics/zonal_stats_DOY_decades.csv
 Outputs/SST/Summary_per_year_per_pixel/*
 Data/SST/*
