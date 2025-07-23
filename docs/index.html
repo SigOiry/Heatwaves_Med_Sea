@@ -10,7 +10,7 @@
 <meta name="author" content="Maria Laura Zoffoli">
 <meta name="author" content="Christian Marchese">
 <meta name="author" content="Laurent Barillé">
-<meta name="dcterms.date" content="2025-07-18">
+<meta name="dcterms.date" content="2025-07-23">
 <meta name="keywords" content="Remote Sensing, Heatwaves">
 
 <title>Marine Heatwaves in a warming Mediterranean Sea</title>
@@ -79,10 +79,10 @@ div.csl-indent {
 <meta name="citation_author" content="Maria Laura Zoffoli">
 <meta name="citation_author" content="Christian Marchese">
 <meta name="citation_author" content="Laurent Barillé">
-<meta name="citation_publication_date" content="2025-07-18">
-<meta name="citation_cover_date" content="2025-07-18">
+<meta name="citation_publication_date" content="2025-07-23">
+<meta name="citation_cover_date" content="2025-07-23">
 <meta name="citation_year" content="2025">
-<meta name="citation_online_date" content="2025-07-18">
+<meta name="citation_online_date" content="2025-07-23">
 <meta name="citation_language" content="en">
 <meta name="citation_journal_title" content="Remote Sensing of Environment">
 <meta name="citation_reference" content="citation_title=Copernicus open access hub;,citation_author=Copernicus;,citation_publication_date=2024;,citation_cover_date=2024;,citation_year=2024;,citation_fulltext_html_url=https://browser.dataspace.copernicus.eu/;">
@@ -149,7 +149,7 @@ div.csl-indent {
                 <div>
             <div class="quarto-title-meta-heading">Published</div>
             <div class="quarto-title-meta-contents">
-              <p class="date">July 18, 2025</p>
+              <p class="date">July 23, 2025</p>
             </div>
           </div>
           
@@ -187,11 +187,12 @@ div.csl-indent {
   <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results"><span class="header-section-number">3</span> Results</a>
   <ul class="collapse">
   <li><a href="#sst-phenology" id="toc-sst-phenology" class="nav-link" data-scroll-target="#sst-phenology"><span class="header-section-number">3.1</span> SST phenology</a></li>
-  <li><a href="#heatwaves" id="toc-heatwaves" class="nav-link" data-scroll-target="#heatwaves"><span class="header-section-number">3.2</span> Heatwaves</a>
+  <li><a href="#heatwaves-by-regions" id="toc-heatwaves-by-regions" class="nav-link" data-scroll-target="#heatwaves-by-regions"><span class="header-section-number">3.2</span> Heatwaves by regions</a></li>
+  <li><a href="#heatwaves-pixel-per-pixels" id="toc-heatwaves-pixel-per-pixels" class="nav-link" data-scroll-target="#heatwaves-pixel-per-pixels"><span class="header-section-number">3.3</span> Heatwaves Pixel per Pixels</a>
   <ul class="collapse">
-  <li><a href="#number-of-event-per-year" id="toc-number-of-event-per-year" class="nav-link" data-scroll-target="#number-of-event-per-year"><span class="header-section-number">3.2.1</span> Number of Event per year</a></li>
-  <li><a href="#intensity" id="toc-intensity" class="nav-link" data-scroll-target="#intensity"><span class="header-section-number">3.2.2</span> Intensity</a></li>
-  <li><a href="#duration" id="toc-duration" class="nav-link" data-scroll-target="#duration"><span class="header-section-number">3.2.3</span> Duration</a></li>
+  <li><a href="#number-of-event-per-year" id="toc-number-of-event-per-year" class="nav-link" data-scroll-target="#number-of-event-per-year"><span class="header-section-number">3.3.1</span> Number of Event per year</a></li>
+  <li><a href="#intensity" id="toc-intensity" class="nav-link" data-scroll-target="#intensity"><span class="header-section-number">3.3.2</span> Intensity</a></li>
+  <li><a href="#duration" id="toc-duration" class="nav-link" data-scroll-target="#duration"><span class="header-section-number">3.3.3</span> Duration</a></li>
   </ul></li>
   </ul></li>
   </ul>
@@ -253,6 +254,11 @@ Figure&nbsp;2: Region of Mediterranean Sea as definied by Marine Strategy Framew
 <h1 data-number="3"><span class="header-section-number">3</span> Results</h1>
 <section id="sst-phenology" class="level2" data-number="3.1">
 <h2 data-number="3.1" class="anchored" data-anchor-id="sst-phenology"><span class="header-section-number">3.1</span> SST phenology</h2>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.3825375</code></pre>
+</div>
+</div>
 <p>Yearly SST time series for each of the 10 Mediterranean sub-regions are presented in <a href="#fig-MapMedSea_timeseries" class="quarto-xref">Figure&nbsp;3</a>. Across all regions, periods of minimum and maximum temperatures occur synchronously, with minima in February–March and maxima in July–August. Overall, every sub-region exhibits higher SST values in 2024 compared to 1982. The most significant increase in summer temperature maxima is observed in Adriatic sea, with a warming rate of 0.63 °C per decade. Similarly, the most substantial increase in winter temperature minima occurs in Aegean Sea showing a warming rate of 0.4 °C per decade.</p>
 <div id="cell-fig-MapMedSea_timeseries" class="cell">
 <div class="cell-output-display">
@@ -268,7 +274,7 @@ Figure&nbsp;3: Seasonal cycle of average sea surface temperature (°C) for ten M
 </div>
 </div>
 </div>
-<p>Dates on which SST minima and maxima occur remain generally consistent over the study period for most regions (<a href="#fig-Med_minmax" class="quarto-xref">Figure&nbsp;4</a>). However, shifts are observed in some areas: the winter temperature minimum in Levantine Sea occurs progressively earlier by 3.32 days per decade, while in Balearic Sea it occurs progressively later by 3.76 days later per decade. Regarding the timing of maximum SST, two regions stand out: Adriatic sea and Aegean Sea both show an earlier occurrence of their annual temperature maxima by 2.41 and 1.58 days per decade, respectively.</p>
+<p>Dates on which SST minima and maxima occur remain generally consistent over the study period for most regions (<a href="#fig-Med_minmax" class="quarto-xref">Figure&nbsp;4</a>). However, shifts are observed in some areas: the winter temperature minimum in Levantine Sea occurs progressively earlier by 3.32 days per decade, while in Balearic Sea it occurs progressively later by 3.76 days per decade. Regarding the timing of maximum SST, two regions stand out: Adriatic sea and Aegean Sea both show an earlier occurrence of their annual temperature maxima by 2.41 and 1.58 days per decade, respectively.</p>
 <div id="cell-fig-Med_minmax" class="cell">
 <div class="cell-output-display">
 <div id="fig-Med_minmax" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -283,6 +289,9 @@ Figure&nbsp;4: Trends in the timing of annual minimum (left panel) and maximum (
 </div>
 </div>
 </div>
+<p><a href="#fig-Med_warm_metrics" class="quarto-xref">Figure&nbsp;5</a> (left) shows the start date of the warm season in all subregions of the Mediterranean Sea. The warm season begins when the daily SST exceeds the 75th percentile (p75) of the subregion’s SST for five consecutive days. A downward trend is evident across all subregions, indicating that the warm season now starts on average 5.66 days earlier per decade. The Levantine Sea shows the greatest advancement in onset, at 8.23 days per decade.</p>
+<p>Regarding the end of the warm season, a consistent delay is observed across all subregions, with the season ending on average 3.69 days later per decade (<a href="#fig-Med_warm_metrics" class="quarto-xref">Figure&nbsp;5</a> middle). Two regions stand out—Levantine Sea and Aegean Sea— showing shifts of 7.01 and 5.33 days per decade, respectively.</p>
+<p><a href="#fig-Med_warm_metrics" class="quarto-xref">Figure&nbsp;5</a> (right) shows the length of the warm season, defined as the interval between its end and start dates. Across the Mediterranean basin, the warm season is lengthening by 9.35 days per decade on average. All subregions exhibit this trend, except for Levantine Sea and Aegean Sea, which show increases of 15.24 and 11.48 days per decade, respectively.</p>
 <div id="cell-fig-Med_warm_metrics" class="cell">
 <div class="cell-output-display">
 <div id="fig-Med_warm_metrics" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -297,6 +306,7 @@ Figure&nbsp;5: Trends in the timing and duration of the warm season across ten M
 </div>
 </div>
 </div>
+<p>The thermic amplitude is defined as the difference between the minimum winter SST and the maximum summer SST. The subregion with the smallest thermal amplitude is Alboran Sea, averaging just 10.82°C between summer peaks and winter troughs. By contrast, Adriatic sea exhibits the largest thermal amplitude in the Mediterranean Sea, at 14.94. Across the entire basin, there is an increasing trend in thermic amplitude, averaging 0.17°C per decade. The region with the most pronounced rise is Adriatic sea where amplitude grows by 0.32°C each decade. This divergence stems from summer temperatures rising about 38 % faster than winter temperatures across the basin.</p>
 <div id="cell-fig-Med_amplitude" class="cell">
 <div class="cell-output-display">
 <div id="fig-Med_amplitude" class="quarto-float quarto-figure quarto-figure-center anchored">
@@ -312,22 +322,25 @@ Figure&nbsp;6: Trends in the timing and duration of the warm season across ten M
 </div>
 </div>
 </section>
-<section id="heatwaves" class="level2" data-number="3.2">
-<h2 data-number="3.2" class="anchored" data-anchor-id="heatwaves"><span class="header-section-number">3.2</span> Heatwaves</h2>
-<section id="number-of-event-per-year" class="level3" data-number="3.2.1">
-<h3 data-number="3.2.1" class="anchored" data-anchor-id="number-of-event-per-year"><span class="header-section-number">3.2.1</span> Number of Event per year</h3>
+<section id="heatwaves-by-regions" class="level2" data-number="3.2">
+<h2 data-number="3.2" class="anchored" data-anchor-id="heatwaves-by-regions"><span class="header-section-number">3.2</span> Heatwaves by regions</h2>
 </section>
-<section id="intensity" class="level3" data-number="3.2.2">
-<h3 data-number="3.2.2" class="anchored" data-anchor-id="intensity"><span class="header-section-number">3.2.2</span> Intensity</h3>
+<section id="heatwaves-pixel-per-pixels" class="level2" data-number="3.3">
+<h2 data-number="3.3" class="anchored" data-anchor-id="heatwaves-pixel-per-pixels"><span class="header-section-number">3.3</span> Heatwaves Pixel per Pixels</h2>
+<section id="number-of-event-per-year" class="level3" data-number="3.3.1">
+<h3 data-number="3.3.1" class="anchored" data-anchor-id="number-of-event-per-year"><span class="header-section-number">3.3.1</span> Number of Event per year</h3>
 </section>
-<section id="duration" class="level3 unnumbered" data-number="3.2.3">
+<section id="intensity" class="level3" data-number="3.3.2">
+<h3 data-number="3.3.2" class="anchored" data-anchor-id="intensity"><span class="header-section-number">3.3.2</span> Intensity</h3>
+</section>
+<section id="duration" class="level3 unnumbered" data-number="3.3.3">
 
 
 </section>
 </section>
 </section>
 
-<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">3.2.3 Duration</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">3.3.3 Duration</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
 <div id="ref-Copernicus_Sentinel" class="csl-entry" role="listitem">
 Copernicus, 2024. <a href="https://browser.dataspace.copernicus.eu/">Copernicus open access hub</a>.
 </div>
@@ -350,7 +363,7 @@ Schlegel, R.W., Smit, A.J., 2018. <span class="nocase">heatwaveR</span>: A centr
   author = {Oiry, Simon and Laura Zoffoli, Maria and Marchese, Christian
     and Barillé, Laurent},
   title = {Marine {Heatwaves} in a Warming {Mediterranean} {Sea}},
-  date = {2025-07-18},
+  date = {2025-07-23},
   langid = {en},
   abstract = {TBD}
 }

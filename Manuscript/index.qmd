@@ -1391,8 +1391,10 @@ df_minmax <- df_timeserie %>%
           max = max(mean)) %>% 
   group_by(name) %>% 
   reframe(max = lm(max~year)$coefficients[[2]],
-          min = lm(min~year)$coefficients[[2]])
+          min = lm(min~year)$coefficients[[2]], 
+          diff = (max - min)/max)
 
+mean(df_minmax$diff)
 # compute breaks every 15 days (1, 16, 31, … up to 361)
 doy_breaks_15 <- seq(1, 366, by = 60)
 
@@ -1586,7 +1588,7 @@ min_max <- min + max & plot_layout(guide = "collect")&     # collect all legends
 
 ```
 
-Dates on which SST minima and maxima occur remain generally consistent over the study period for most regions (@fig-Med_minmax). However, shifts are observed in some areas: the winter temperature minimum in `r df_lm_extrem %>% dplyr::filter(doy_min == min(doy_min)) %>% pull(region)` occurs progressively earlier by `r abs(round(df_lm_extrem %>% dplyr::filter(doy_min == min(doy_min)) %>% pull(doy_min) * 10,2))` days per decade, while in `r df_lm_extrem %>% dplyr::filter(doy_min == max(doy_min)) %>% pull(region)` it occurs progressively later by `r abs(round(df_lm_extrem %>% dplyr::filter(doy_min == max(doy_min)) %>% pull(doy_min) * 10,2))` days later per decade. Regarding the timing of maximum SST, two regions stand out: `r df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region)` and `r df_lm_extrem %>% dplyr::filter(region != df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region))%>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region) ` both show an earlier occurrence of their annual temperature maxima by  `r abs(round(df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(doy_max)*10,2))` and `r abs(round(df_lm_extrem %>% dplyr::filter(region != df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region))%>% dplyr::filter(doy_max == min(doy_max)) %>% pull(doy_max)*10,2))` days per decade, respectively. 
+Dates on which SST minima and maxima occur remain generally consistent over the study period for most regions (@fig-Med_minmax). However, shifts are observed in some areas: the winter temperature minimum in `r df_lm_extrem %>% dplyr::filter(doy_min == min(doy_min)) %>% pull(region)` occurs progressively earlier by `r abs(round(df_lm_extrem %>% dplyr::filter(doy_min == min(doy_min)) %>% pull(doy_min) * 10,2))` days per decade, while in `r df_lm_extrem %>% dplyr::filter(doy_min == max(doy_min)) %>% pull(region)` it occurs progressively later by `r abs(round(df_lm_extrem %>% dplyr::filter(doy_min == max(doy_min)) %>% pull(doy_min) * 10,2))` days per decade. Regarding the timing of maximum SST, two regions stand out: `r df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region)` and `r df_lm_extrem %>% dplyr::filter(region != df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region))%>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region) ` both show an earlier occurrence of their annual temperature maxima by  `r abs(round(df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(doy_max)*10,2))` and `r abs(round(df_lm_extrem %>% dplyr::filter(region != df_lm_extrem %>% dplyr::filter(doy_max == min(doy_max)) %>% pull(region))%>% dplyr::filter(doy_max == min(doy_max)) %>% pull(doy_max)*10,2))` days per decade, respectively. 
 
 ```{r Display date of min and max}
 #| cache: false
@@ -1603,7 +1605,7 @@ knitr::include_graphics("Figs/plot_min_max_SST.png")
 #| cache: false
 #| echo: false
 #| warning: false
-#| eval: false
+#| eval: true
 
 
 library(lubridate)
@@ -1615,7 +1617,7 @@ library(heatwaveR)
 
 
 
-df <- fread("Outputs/SST/region_stats.csv") %>% 
+df <- fread("../Outputs/SST/region_stats.csv") %>% 
   mutate(date = as.character(date) %>% as.Date(format = "%Y%m%d"),
          mean = mean - 273.15) %>% 
   dplyr::select(date,region = "name",SST = "mean")
@@ -1682,12 +1684,14 @@ threshold_metrics <- df3 %>%
   )
 
 
-lm_df <- threshold_metrics %>% 
+lm_df_warm <- threshold_metrics %>% 
   mutate(doy_onset = yday(warm_onset),
-         doy_offset = yday(warm_end)) %>% 
+         doy_offset = yday(warm_end), 
+         length = doy_offset - doy_onset) %>% 
   group_by(region) %>% 
   reframe(rate_onset = lm(doy_onset ~ year)$coefficients[[2]],
-          rate_end = lm(doy_offset ~ year)$coefficients[[2]])
+          rate_end = lm(doy_offset ~ year)$coefficients[[2]],
+          rate_length = lm(length ~ year)$coefficients[[2]])
 
 
 
@@ -1702,7 +1706,7 @@ doy_labels_15 <- format(
 )
 
 
-(plot_doy_warm_start <- threshold_metrics %>%
+plot_doy_warm_start <- threshold_metrics %>%
   mutate(
     doy_onset  = yday(warm_onset),
     doy_offset = yday(warm_end),
@@ -1758,9 +1762,9 @@ doy_labels_15 <- format(
       panel.grid.minor     = element_blank(),
       plot.background = element_rect(fill = "white",color = NA)
     )
-)
 
-(plot_doy_warm_end <- threshold_metrics %>%
+
+plot_doy_warm_end <- threshold_metrics %>%
   mutate(
     doy_onset  = yday(warm_onset),
     doy_offset = yday(warm_end),
@@ -1816,9 +1820,9 @@ doy_labels_15 <- format(
       panel.grid.minor     = element_blank(),
       plot.background = element_rect(fill = "white",color = NA)
     )
-)
 
-(plot_doy_warm_duration <- threshold_metrics %>%
+
+plot_doy_warm_duration <- threshold_metrics %>%
   mutate(
     doy_onset  = yday(warm_onset),
     doy_offset = yday(warm_end),
@@ -1871,12 +1875,18 @@ doy_labels_15 <- format(
       panel.grid.minor     = element_blank(),
       plot.background = element_rect(fill = "white",color = NA)
     )
-)
+
 
 plot_doy_warm_merged <- (plot_doy_warm_start + plot_doy_warm_end) + plot_doy_warm_duration
-ggsave("Manuscript/Figs/plot_warm_season.png",plot_doy_warm_merged, dpi = 300)
+# ggsave("Manuscript/Figs/plot_warm_season.png",plot_doy_warm_merged, dpi = 300)
 
 ```
+
+@fig-Med_warm_metrics (left) shows the start date of the warm season in all subregions of the Mediterranean Sea. The warm season begins when the daily SST exceeds the 75th percentile (p75) of the subregion’s SST for five consecutive days. A downward trend is evident across all subregions, indicating that the warm season now starts on average `r abs(round(mean(lm_df_warm$rate_onset)*10,2))` days earlier per decade. The Levantine Sea shows the greatest advancement in onset, at `r abs(round(lm_df_warm %>% dplyr::filter(rate_onset == min(rate_onset)) %>% pull(rate_onset)*10,2))` days per decade.
+
+Regarding the end of the warm season, a consistent delay is observed across all subregions, with the season ending on average `r abs(round(mean(lm_df_warm$rate_end)*10,2))` days later per decade (@fig-Med_warm_metrics middle). Two regions stand out—`r lm_df_warm %>% dplyr::filter(rate_end == max(rate_end)) %>% pull(region)` and `r lm_df_warm %>% dplyr::filter(rate_end != max(rate_end)) %>% dplyr::filter(rate_end == max(rate_end)) %>% pull(region)`— showing shifts of `r round(lm_df_warm %>% dplyr::filter(rate_end == max(rate_end)) %>% pull(rate_end)*10,2)` and `r round(lm_df_warm %>% dplyr::filter(rate_end != max(rate_end)) %>% dplyr::filter(rate_end == max(rate_end)) %>% pull(rate_end)*10,2)` days per decade, respectively.
+
+@fig-Med_warm_metrics (right) shows the length of the warm season, defined as the interval between its end and start dates. Across the Mediterranean basin, the warm season is lengthening by `r round(mean(lm_df_warm$rate_length)*10,2)` days per decade on average. All subregions exhibit this trend, except for `r lm_df_warm %>% dplyr::filter(rate_length == max(rate_length)) %>% pull(region)` and `r lm_df_warm %>% dplyr::filter(rate_length != max(rate_length)) %>% dplyr::filter(rate_length == max(rate_length)) %>% pull(region)`, which show increases of `r round(lm_df_warm %>% dplyr::filter(rate_length == max(rate_length)) %>% pull(rate_length)*10,2)` and `r round(lm_df_warm %>% dplyr::filter(rate_length != max(rate_length)) %>% dplyr::filter(rate_length == max(rate_length)) %>% pull(rate_length)*10,2)` days per decade, respectively.
 
 ```{r Display Warmth-onset and offset}
 #| cache: false
@@ -1893,7 +1903,7 @@ knitr::include_graphics("Figs/plot_warm_season.png")
 #| cache: false
 #| echo: false
 #| warning: false
-#| eval: false
+#| eval: true
 
 library(lubridate)
 library(zoo)
@@ -1925,9 +1935,12 @@ lm_df_amp <- seasonal_metrics  %>%
   group_by(region) %>% 
   reframe(rate_amplitude = lm(amplitude ~ year)$coefficients[[2]])
 
+df_amp <- seasonal_metrics %>% 
+  group_by(region) %>% 
+  reframe(mean = mean(amplitude, na.rm = T))
 
 
-plot_amplitude <- seasonal_metrics %>% 
+plot_amplitude <- seasonal_meanplot_amplitude <- seasonal_metrics %>% 
   ggplot(aes(x = year, y = amplitude, color = region))+
   geom_point(alpha = 0.3)+
   geom_smooth(method = "lm",se = T, alpha = 0.1)+
@@ -1959,9 +1972,13 @@ plot_amplitude <- seasonal_metrics %>%
       plot.background = element_rect(fill = "white",color = NA)
     )
 
-ggsave("Manuscript/Figs/plot_amplitude.png",plot_amplitude, dpi = 300)
+# ggsave("Manuscript/Figs/plot_amplitude.png",plot_amplitude, dpi = 300)
 
 ```
+
+
+The thermic amplitude is defined as the difference between the minimum winter SST and the maximum summer SST. The subregion with the smallest thermal amplitude is `r df_amp %>% dplyr::filter(mean == min(mean)) %>% pull(region)`, averaging just `r round(df_amp %>% dplyr::filter(mean == min(mean)) %>% pull(mean),2)`°C between summer peaks and winter troughs. By contrast, `r df_amp %>% dplyr::filter(mean == max(mean)) %>% pull(region)` exhibits the largest thermal amplitude in the Mediterranean Sea, at `r round(df_amp %>% dplyr::filter(mean == max(mean)) %>% pull(mean),2)`. Across the entire basin, there is an increasing trend in thermic amplitude, averaging `r round(mean(lm_df_amp$rate_amplitude)*10,2)`°C per decade. The region with the most pronounced rise is `r lm_df_amp %>% dplyr::filter(rate_amplitude == max(rate_amplitude)) %>% pull(region)` where amplitude grows by `r round(lm_df_amp %>% dplyr::filter(rate_amplitude == max(rate_amplitude)) %>% pull(rate_amplitude)*10,2)`°C each decade. This divergence stems from summer temperatures rising about 38 % faster than winter temperatures across the basin.
+
 
 ```{r Display amplitude}
 #| cache: false
@@ -1975,7 +1992,45 @@ knitr::include_graphics("Figs/plot_amplitude.png")
 ```
 
 
-## Heatwaves
+## Heatwaves by regions
+
+```{r}
+#| cache: false
+#| echo: false
+#| warning: false
+#| eval: false
+
+library(tidyverse)
+library(heatwaveR)
+
+df_timeserie <- fread("../Outputs/SST/region_stats.csv") %>% 
+  mutate(date = as.character(date) %>% as.Date(format = "%Y%m%d"),
+         mean = mean - 273.15,
+         median = median - 273.15,
+         p10 = p10 - 273.15,
+         p25 = p25 - 273.15,
+         p75 = p75 - 273.15,
+         p90 = p90 - 273.15) %>%
+  as_tibble() %>% 
+  mutate(doy = yday(date),
+         year = year(date))
+
+df_timeserie %>% 
+  dplyr::filter(name == "Adriatic sea") %>% 
+  ts2clm(date,mean)
+
+```
+
+
+
+
+
+
+
+
+
+
+## Heatwaves Pixel per Pixels
 ### Number of Event per year
 
 ```{r n_envent plots building1}
